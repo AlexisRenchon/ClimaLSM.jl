@@ -39,7 +39,7 @@ information needed for computing turbulent surface fluxes when
 driving the bucket model in standalone mode.
 $(DocStringExtensions.FIELDS)
 """
-struct PrescribedAtmosphere{FT, LP, SP, TA, UA, QA, RA} <:
+struct PrescribedAtmosphere{FT, LP, SP, TA, UA, QA, RA, CA} <:
        AbstractAtmosphericDrivers{FT}
     "Precipitation (m/s) function of time: positive by definition"
     liquid_precip::LP
@@ -53,10 +53,12 @@ struct PrescribedAtmosphere{FT, LP, SP, TA, UA, QA, RA} <:
     q::QA
     "Prescribed air density (function of time)  at the reference height (kg/m^3)"
     ρ::RA
+    "CO2 concentration in atmosphere (mol/mol)"
+    c::CA
     "Reference height, relative to surface elevation(m)"
     h::FT
-    function PrescribedAtmosphere(liquid_precip, snow_precip, T, u, q, ρ, h)
-        args = (liquid_precip, snow_precip, T, u, q, ρ)
+    function PrescribedAtmosphere(liquid_precip, snow_precip, T, u, q, ρ, c, h)
+        args = (liquid_precip, snow_precip, T, u, q, ρ, c)
         return new{typeof(h), typeof.(args)...}(args..., h)
     end
 
@@ -218,15 +220,17 @@ Container for the prescribed radiation functions needed to drive the
 bucket model in standalone mode.
 $(DocStringExtensions.FIELDS)
 """
-struct PrescribedRadiativeFluxes{FT, SW, LW} <: AbstractRadiativeDrivers{FT}
+struct PrescribedRadiativeFluxes{FT, SW, LW, TS} <: AbstractRadiativeDrivers{FT}
     "Downward shortwave radiation function of time (W/m^2): positive indicates towards surface"
     SW_d::SW
     "Downward longwave radiation function of time (W/m^2): positive indicates towards surface"
     LW_d::LW
+    "Sun zenith angle, in radians"
+    θs::TS
 end
 
-PrescribedRadiativeFluxes(FT, SW_d, LW_d) =
-    PrescribedRadiativeFluxes{FT, typeof(SW_d), typeof(LW_d)}(SW_d, LW_d)
+PrescribedRadiativeFluxes(FT, SW_d, LW_d, θs) =
+    PrescribedRadiativeFluxes{FT, typeof(SW_d), typeof(LW_d)}(SW_d, LW_d, θs)
 
 
 

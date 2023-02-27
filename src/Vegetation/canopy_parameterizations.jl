@@ -415,7 +415,8 @@ where `VPD` is the vapor pressure deficit in the atmosphere
 (Pa), and `g_1` is a constant with units of `sqrt(Pa)`.
 """
 function medlyn_term(g1::FT, VPD::FT) where {FT}
-    return 1 + g1 / sqrt(VPD)
+    m = 1 + g1 / sqrt(VPD)
+    return m
 end
 
 

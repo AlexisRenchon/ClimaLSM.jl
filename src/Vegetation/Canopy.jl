@@ -1,86 +1,31 @@
 module Canopy
+using Thermodynamics
 using ClimaLSM
+using ClimaCore
+using ClimaLSM: AbstractModel, AbstractRadiativeDrivers, AbstractAtmosphericDrivers
+import ClimaLSM:
+    name,
+    domain,
+    prognostic_vars,
+    prognostic_types,
+    auxiliary_vars,
+    auxiliary_types,
+    initialize_prognostic,
+    initialize_auxiliary,
+    make_update_aux,
+    make_ode_function
+    
+using ClimaLSM.Domains: Point, Plane, SphericalSurface
 using DocStringExtensions
-export SharedCanopyParameters,
-    BeerLambertParameters, FarquharParameters, MedlynConductanceParameters
-
+export SharedCanopyParameters, CanopyModel
+include("./PlantHydraulics.jl")
+using .PlantHydraulics
+import .PlantHydraulics: transpiration, AbstractTranspiration
 include("./canopy_parameterizations.jl")
+include("./stomatalconductance.jl")
+include("./photosynthesis.jl")
+include("./radiation.jl")
 
-"""
-    BeerLambertParameters{FT <: AbstractFloat}
-
-The required parameters for the Beer-Lambert radiative transfer model.
-$(DocStringExtensions.FIELDS)
-"""
-struct BeerLambertParameters{FT <: AbstractFloat}
-    "Leaf angle distribution function (unitless)"
-    ld::FT
-    "PAR canopy reflectance (unitless)"
-    ρ_leaf::FT
-    "Clumping index following Braghiere (2021) (unitless)"
-    Ω::FT
-end
-
-"""
-    FarquharParameters{FT<:AbstractFloat}
-
-The required parameters for the Farquhar photosynthesis model.
-$(DocStringExtensions.FIELDS)
-"""
-struct FarquharParameters{FT <: AbstractFloat}
-    "Photosynthesis mechanism: C3 or C4"
-    mechanism::AbstractPhotosynthesisMechanism
-    "Vcmax at 25 °C (mol CO2/m^2/s)"
-    Vcmax25::FT
-    "Γstar at 25 °C (mol/mol)"
-    Γstar25::FT
-    "Michaelis-Menten parameter for CO2 at 25 °C (mol/mol)"
-    Kc25::FT
-    "Michaelis-Menten parameter for O2 at 25 °C (mol/mol)"
-    Ko25::FT
-    "Energy of activation for CO2 (J/mol)"
-    ΔHkc::FT
-    "Energy of activation for oxygen (J/mol)"
-    ΔHko::FT
-    "Energy of activation for Vcmax (J/mol)"
-    ΔHVcmax::FT
-    "Energy of activation for Γstar (J/mol)"
-    ΔHΓstar::FT
-    "Energy of activation for Jmax (J/mol)"
-    ΔHJmax::FT
-    "Energy of activation for Rd (J/mol)"
-    ΔHRd::FT
-    "Reference temperature equal to 25 degrees Celsius (K)"
-    To::FT
-    "Intercelluar O2 concentration (mol/mol); taken to be constant"
-    oi::FT
-    "Quantum yield of photosystem II (Bernacchi, 2003; unitless)"
-    ϕ::FT
-    "Curvature parameter, a fitting constant to compute J, unitless"
-    θj::FT
-    "Constant factor appearing the dark respiration term, equal to 0.015."
-    f::FT
-    "Fitting constant to compute the moisture stress factor (Pa^{-1})"
-    sc::FT
-    "Fitting constant to compute the moisture stress factor (Pa)"
-    ψc::FT
-end
-
-"""
-    MedlynConductanceParameters{FT <: AbstractFloat}
-
-The required parameters for the Medlyn stomatal conductance model.
-$(DocStringExtensions.FIELDS)
-"""
-struct MedlynConductanceParameters{FT <: AbstractFloat}
-    "Relative diffusivity of water vapor (unitless)"
-    # TODO: move to CLIMAParameters"
-    Drel::FT
-    "Minimum stomatal conductance mol/m^2/s"
-    g0::FT
-    "Slope parameter, inversely proportional to the square root of marginal water use efficiency (Pa^{1/2})"
-    g1::FT
-end
 
 """
     SharedCanopyParameters{FT <: AbstractFloat, PSE}
@@ -95,102 +40,180 @@ struct SharedCanopyParameters{FT <: AbstractFloat, PSE}
     earth_param_set::PSE
 end
 
-"""
-    function BeerLambertParameters{FT}(;
-        ld = FT(0.5),    
-        ρ_leaf = FT(0.1),
-        Ω = FT(1),
-    ) where {FT}
-
-A constructor supplying default values for the BeerLambertParameters struct.
-"""
-function BeerLambertParameters{FT}(;
-    ld = FT(0.5),
-    ρ_leaf = FT(0.1),
-    Ω = FT(1),
-) where {FT}
-    return BeerLambertParameters{FT}(ld, ρ_leaf, Ω)
+struct CanopyModel{FT,RM, PM, SM, PHM, PS, D} <: AbstractModel{FT}
+    radiative_transfer::RM
+    photosynthesis::PM
+    conductance::SM
+    hydraulics::PHM
+    parameters::PS
+    domain::D
+    #atmos::AbstractAtmosphericDrivers{FT}
+    #radiation::AbstractRadiativeDrivers{FT}
+end
+    
+function CanopyModel{FT}(;
+                         radiative_transfer::AbstractRadiationModel{FT},
+                         photosynthesis::AbstractPhotosynthesisModel{FT},
+                         conductance::AbstractStomatalConductanceModel{FT},
+                         hydraulics::AbstractPlantHydraulicsModel{FT}
+                         parameters::SharedCanopyParameters{FT, PSE},
+                         domain::Union{ClimaLSM.Domains.Point, ClimaLSM.Domains.Plane, ClimaLSM.Domains.SphericalSurface}) where {FT, PSE}
+    if hydraulics.domain != domain
+        throw(
+            AssertionError(
+                "The provided canopy model domain must be the same as the hydraulics model domain.",
+            ),
+        )
+    end
+    args = (radiative_transfer, photosynthesis, conductance, hydraulics,parameters, domain)
+    return CanopyModel{FT, typeof.(args)...}(args...)
 end
 
-"""
-    function FarquharParameters{FT}(mechanism::AbstractPhotosynthesisMechanism;
-        oi = FT(0.209),# mol/mol
-        ϕ = FT(0.6), # unitless
-        θj = FT(0.9), # unitless
-        f = FT(0.015), # unitless
-        sc = FT(5e-6),# Pa
-        ψc = FT(-2e6), # Pa
-        Vcmax25 = FT(5e-5), # converted from 50 μmol/mol CO2/m^2/s to mol/m^2/s
-        Γstar25 = FT(4.275e-5),  # converted from 42.75 μmol/mol to mol/mol
-        Kc25 = FT(4.049e-4), # converted from 404.9 μmol/mol to mol/mol
-        Ko25 = FT(0.2874), # converted from 278.4 mmol/mol to mol/mol
-        To = FT(298.15), # 25 C
-        ΔHkc = FT(79430), #J/mol, Table 11.2 Bonan
-        ΔHko = FT(36380), #J/mol, Table 11.2 Bonan
-        ΔHVcmax = FT(58520), #J/mol, Table 11.2 Bonan
-        ΔHΓstar = FT(37830), #J/mol, 11.2 Bonan
-        ΔHJmax = FT(43540), # J/mol, 11.2 Bonan
-        ΔHRd = FT(43390), # J/mol, 11.2 Bonan
-        ) where {FT}
 
-A constructor supplying default values for the FarquharParameters struct.
-"""
-function FarquharParameters{FT}(
-    mechanism::AbstractPhotosynthesisMechanism;
-    oi = FT(0.209),# mol/mol
-    ϕ = FT(0.6), # unitless
-    θj = FT(0.9), # unitless
-    f = FT(0.015), # unitless
-    sc = FT(5e-6),# Pa
-    ψc = FT(-2e6), # Pa
-    Vcmax25 = FT(5e-5), # converted from 50 μmol/mol CO2/m^2/s to mol/m^2/s
-    Γstar25 = FT(4.275e-5),  # converted from 42.75 μmol/mol to mol/mol
-    Kc25 = FT(4.049e-4), # converted from 404.9 μmol/mol to mol/mol
-    Ko25 = FT(0.2874), # converted from 278.4 mmol/mol to mol/mol
-    To = FT(298.15), # 25 C
-    ΔHkc = FT(79430), #J/mol, Table 11.2 Bonan
-    ΔHko = FT(36380), #J/mol, Table 11.2 Bonan
-    ΔHVcmax = FT(58520), #J/mol, Table 11.2 Bonan
-    ΔHΓstar = FT(37830), #J/mol, 11.2 Bonan
-    ΔHJmax = FT(43540), # J/mol, 11.2 Bonan
-    ΔHRd = FT(46390), #J/mol, 11.2 Bonan
-) where {FT}
-    return FarquharParameters{FT}(
-        mechanism,
-        Vcmax25,
-        Γstar25,
-        Kc25,
-        Ko25,
-        ΔHkc,
-        ΔHko,
-        ΔHVcmax,
-        ΔHΓstar,
-        ΔHJmax,
-        ΔHRd,
-        To,
-        oi,
-        ϕ,
-        θj,
-        f,
-        sc,
-        ψc,
+
+ClimaLSM.name(::CanopyModel) = :canopy
+ClimaLSM.domain(::CanopyModel) = :surface
+canopy_components(::CanopyModel) = (:hydraulics, :conductance, :photosynthesis, :radiative_transfer)
+
+function prognostic_vars(canopy::CanopyModel)
+    components = canopy_components(canopy)
+    prognostic_list = map(components) do model
+        prognostic_vars(getproperty(canopy, model))
+    end
+    return NamedTuple{components}(prognostic_list)
+end
+
+function prognostic_types(canopy::CanopyModel)
+    components = canopy_components(canopy)
+    prognostic_list = map(components) do model
+        prognostic_types(getproperty(canopy, model))
+    end
+    return NamedTuple{components}(prognostic_list)
+end
+
+function auxiliary_vars(canopy::CanopyModel)
+    components = canopy_components(canopy)
+    auxiliary_list = map(components) do model
+        auxiliary_vars(getproperty(canopy, model))
+    end
+    return NamedTuple{components}(
+        auxiliary_list,
     )
 end
 
-"""
-    function MedlynConductanceParameters{FT}(;
-        Drel = FT(1.6), # unitless
-        g0 =  FT(1e-4), # mol/m^2/s 
-        g1 = FT(790) # converted from 5 √kPa to units of √Pa. 5 sqrt(kPa)/(1kPa)*10^3Pa
-) where{FT}
-
-A constructor supplying default values for the MedlynConductanceParameters struct.
-"""
-function MedlynConductanceParameters{FT}(;
-    Drel = FT(1.6), # unitless
-    g0 = FT(1e-4), # mol/m^2/s 
-    g1 = FT(790), # converted from 5 √kPa to units of √Pa. 5 sqrt(kPa)/(1kPa)*10^3Pa
-) where {FT}
-    return MedlynConductanceParameters{FT}(Drel, g0, g1)
+function auxiliary_types(canopy::CanopyModel)
+    components = canopy_components(canopy)
+    auxiliary_list = map(components) do model
+        auxiliary_types(getproperty(canopy, model))
+    end
+    return NamedTuple{components}(
+        auxiliary_list,
+    )
 end
+
+
+function initialize_prognostic(model::CanopyModel{FT}, coords::ClimaCore.Fields.Field) where {FT}
+    components = canopy_components(model)
+    Y_state_list = map(components) do (component)
+        submodel = getproperty(model, component)
+        zero_state =
+            map(_ -> zero(FT), coords)
+        getproperty(initialize_prognostic(submodel, zero_state), component)
+    end
+    Y = ClimaCore.Fields.FieldVector(; name(model) => NamedTuple{components}(Y_state_list))
+    return Y
+end
+
+function ClimaLSM.make_update(aux)(canopy::CanopyModel{FT, BeerLambertModel, FarquharModel, MedlynConductanceModel, PlantHydraulicsModel})
+    plant_hydraulics_update_aux! = make_update_aux(canopy.hydraulics)
+    function update_aux!(p, Y, t)
+        # update the plant hydraulics system
+        plant_hydraulics_update_aux!(p,Y,t)
+        # unpack params
+        earth_param_set = canopy.parameters.earth_param_set
+        R = FT(LSMP.gas_constant(earth_param_set))
+        c = FT(LSMP.light_speed(earth_param_set))
+        h = FT(LSMP.planck_constant(earth_param_set))
+        N_a = FT(LSMP.avogadro_constant(earth_param_set))
+        thermo_params = canopy.parameters.thermodynamic_parameters
+
+        (; Vcmax25, Γstar25, ΔHJmax, ΔHVcmax, ΔHΓstar, f, ΔHRd, To, θj, ϕ, mechanism, sc, ψc, oi) = canopy.photosynthesis.parameters
+        (; g1, g0, Drel) = canopy.conductance.parameters
+        (; ld, Ω, ρ_leaf) = canopy.radiative_transfer.parameters
+        (; LAI) = canopy.parameters
+        λ = FT(5e-7) # m (500 nm)
+        energy_per_photon = h * c / λ
+
+        ca::FT = canopy.atmos.c(t)
+        P::FT = canopy.atmos.P(t)
+        u::FT = canopy.atmos.u(t)
+        T::FT = canopy.atmos.T(t)
+        h::FT = canopy.atmos.h
+        q::FT = canopy.atmos.q(t)
+        SW_d::FT = canopy.radiation.SW_d(t)
+        LW_d::FT = canopy.radiation.LW_d(t)  
+        θs::FT  = canopy.radiation.θs(t)      
+        #atmos_ts = construct_atmos_ts(canopy.atmos, t, thermo_params)
+        # compute VPD
+        es = Thermodynamics.saturation_vapor_pressure(thermo_params, T, Thermodynamics.Liquid())
+        ea = q * P / (0.622 + 0.378 * q)
+        VPD = es - ea
+        PAR = SW_d / (energy_per_photon * N_a) / 2
+
+        K = extinction_coeff(ld, θs)
+        APAR = plant_absorbed_ppfd(PAR, ρ_leaf, K, LAI, Ω)   
+        β = moisture_stress(p.canopy.hydraulics.ψ[1], sc, ψc) 
+        Jmax = max_electron_transport(Vcmax25, ΔHJmax,T,To,R)
+        J = electron_transport(p.canopy.photosynthesis.apar, Jmax, θj, ϕ)
+        Vcmax = compute_Vcmax(Vcmax25, T, To, R, ΔHVcmax)
+        Γstar = co2_compensation(Γstar25, ΔHΓstar, T, To, R)
+        m = medlyn_term(g1, VPD)
+        ci = intercellular_co2(ca, Γstar, m)
+        Aj = light_assimilation(mechanism, J, ci, Γstar)
+        Kc = MM_Kc(Kc25, ΔHkc, T, To, R)
+        Ko = MM_Ko(Ko25, ΔHko, T, To, R)
+        Ac = rubisco_assimilation(mechanism, Vcmax, ci, Γstar, Kc, Ko, oi)
+        Rd = dark_respiration(Vcmax25, β, f, ΔHRd, T, To, R)
+        
+        p.canopy.photosynthesis.apar = APAR
+        p.canopy.photosynthesis.An = net_photosynthesis(Ac, Aj, Rd, β)
+        p.canopy.photosynthesis.GPP = compute_GPP(An, K, LAI, Ω)
+        p.canopy.photosynthesis.gs = medlyn_conductance(g0, Drel, m, An, ca)
+
+        # compute transpiration and store in p so plant hydraulics can access it.
+    end
+end
+
+
+function make_ode_function(canopy::CanopyModel)
+    components = canopy_components(canopy)
+    rhs_function_list = map(x -> make_rhs(getproperty(canopy, x)), components)
+    update_aux! = make_update_aux(canopy)
+    function ode_function!(dY, Y, p, t)
+        update_aux!(p, Y, t)
+        for f! in rhs_function_list
+            f!(dY, Y, p, t)
+        end
+    end
+    return ode_function!
+end
+
+
+"""
+    DiagnosticTranspiration{FT} <: AbstractTranspiration{FT}
+
+A concrete type used for dispatch when computing the transpiration
+from the leaves, in the case where transpiration is computed
+diagnostically, as a function of prognostic variables and parameters
+"""
+struct DiagnosticTranspiration{FT} <: AbstractTranspiration{FT} end
+function transpiration(
+    transpiration::DiagnosticTranspiration{FT},
+    t::FT,
+    Y,
+    p
+)::FT where {FT}
+#    return the correct value!
+end
+
 end

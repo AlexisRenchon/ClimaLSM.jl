@@ -16,7 +16,7 @@ $(DocStringExtensions.FIELDS)
 struct SoilPlantHydrologyModel{
     FT,
     SM <: Soil.AbstractSoilModel{FT},
-    VM <: PlantHydraulics.AbstractVegetationModel{FT},
+    VM <: PlantHydraulics.AbstractPlantHydraulicsModel{FT},
 } <: AbstractLandModel{FT}
     "The soil model to be used"
     soil::SM
@@ -34,7 +34,7 @@ end
                       vegetation_args::NamedTuple = (;),
                       ) where {FT,
                                SM <: Soil.AbstractSoilModel{FT},
-                               VM <: PlantHydraulics.AbstractVegetationModel{FT}}
+                               VM <: PlantHydraulics.AbstractPlantHydraulicsModel{FT}}
 A constructor for the `SoilPlantHydrologyModel`, which takes in the concrete model
 type and required arguments for each component, constructs those models,
 and constructs the `SoilPlantHydrologyModel` from them.
@@ -52,7 +52,7 @@ function SoilPlantHydrologyModel{FT}(;
 ) where {
     FT,
     SM <: Soil.AbstractSoilModel{FT},
-    VM <: PlantHydraulics.AbstractVegetationModel{FT},
+    VM <: PlantHydraulics.AbstractPlantHydraulicsModel{FT},
 }
 
     # These may be passed in, or set, depending on use scenario.
