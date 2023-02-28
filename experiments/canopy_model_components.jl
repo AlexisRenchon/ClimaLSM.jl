@@ -1,6 +1,6 @@
 using ClimaCore
-import CLIMAParameters as CP
-
+using Insolation
+using Dates
 if !("." in LOAD_PATH)
     push!(LOAD_PATH, ".")
 end
@@ -34,20 +34,22 @@ rt_model = BeerLambertModel{FT}(RTparams)
 earth_param_set = create_lsm_parameters(FT)
 LAI = FT(0.5)
 shared_params = SharedCanopyParameters{FT, typeof(earth_param_set)}(LAI, earth_param_set)
-# 90 ->0 -> 90 in 1 day
-θs(t; lat, lon) = t -> # replace
-
-function mod360(x)
-    return mod(x, 360)
+lat = FT(0.0)
+long = FT(0.0)
+function θs(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
+    return FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
 end
 
+function SW_d(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
+    θs = FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
+    return cos(θs) * FT(500) # W/m^2
+end
 
+function LW_d(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
+    θs = FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
+    return cos(θs) * FT(500) # W/m^2
+end
 
-
-
-
-SW_d(t; lat, lon) = t -> cos.(θs) * FT.(500) # W/m^2
-LW_d(t; lat, lon) = t ->
 u(t) = t -> eltype(t)(3)
 function u(t)
     return 3

@@ -55,7 +55,7 @@ function CanopyModel{FT}(;
                          radiative_transfer::AbstractRadiationModel{FT},
                          photosynthesis::AbstractPhotosynthesisModel{FT},
                          conductance::AbstractStomatalConductanceModel{FT},
-                         hydraulics::AbstractPlantHydraulicsModel{FT}
+                         hydraulics::AbstractPlantHydraulicsModel{FT},
                          parameters::SharedCanopyParameters{FT, PSE},
                          domain::Union{ClimaLSM.Domains.Point, ClimaLSM.Domains.Plane, ClimaLSM.Domains.SphericalSurface}) where {FT, PSE}
     if hydraulics.domain != domain
@@ -124,7 +124,7 @@ function initialize_prognostic(model::CanopyModel{FT}, coords::ClimaCore.Fields.
     return Y
 end
 
-function ClimaLSM.make_update(aux)(canopy::CanopyModel{FT, BeerLambertModel, FarquharModel, MedlynConductanceModel, PlantHydraulicsModel})
+function ClimaLSM.make_update_aux(canopy::CanopyModel{FT, BeerLambertModel, FarquharModel, MedlynConductanceModel, PlantHydraulicsModel}) where {FT}
     plant_hydraulics_update_aux! = make_update_aux(canopy.hydraulics)
     function update_aux!(p, Y, t)
         # update the plant hydraulics system

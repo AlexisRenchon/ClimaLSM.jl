@@ -1,5 +1,6 @@
 import CLIMAParameters as CP
 import Thermodynamics.Parameters as TDP
+import Insolation.Parameters as IP
 import SurfaceFluxes.Parameters as SFP
 import SurfaceFluxes.UniversalFunctions as UF
 import ClimaLSM.Parameters as LSMP
@@ -12,6 +13,11 @@ param_set = create_lsm_parameters(FT)
 function create_lsm_parameters(FT)
     toml_dict = CP.create_toml_dict(FT; dict_type = "alias")
 
+    insol_aliases = string.(fieldnames(IP.InsolationParameters))
+    insol_param_pairs = CP.get_parameter_values!(toml_dict, insol_aliases, "Insolation")
+    insol_params = IP.InsolationParameters{FT}(; insol_param_pairs...)
+    IPT = typeof(insol_params)
+    
     aliases = string.(fieldnames(TDP.ThermodynamicsParameters))
     param_pairs = CP.get_parameter_values!(toml_dict, aliases, "Thermodynamics")
     thermo_params = TDP.ThermodynamicsParameters{FT}(; param_pairs...)
@@ -47,10 +53,11 @@ function create_lsm_parameters(FT)
 
     aliases = string.(fieldnames(LSMP.LSMParameters))
     param_pairs = CP.get_parameter_values!(toml_dict, aliases, "ClimaLSM")
-    param_set = LSMP.LSMParameters{FT, TP, SFPS}(;
-        param_pairs...,
-        thermo_params,
-        surf_flux_params,
+    param_set = LSMP.LSMParameters{FT, TP, SFPS, IPT}(;
+                                                      param_pairs...,
+                                                      thermo_params,
+                                                      surf_flux_params,
+                                                      insol_params
     )
 
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")

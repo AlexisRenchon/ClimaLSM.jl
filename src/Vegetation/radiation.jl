@@ -41,11 +41,3 @@ end
 ClimaLSM.name(model::AbstractRadiationModel) = :radiative_transfer
 ClimaLSM.auxiliary_vars(model::BeerLambertModel) = (:apar,)
 ClimaLSM.auxiliary_types(model::BeerLambertModel{FT}) where {FT} = (FT,)
-
-function ClimaLSM.make_update(aux)(model::BeerLambertModel{FT}, canopy::CanopyModel)
-    function update_aux!(p, Y, t)
-        (c_a, T, ...) = canopy.atmos
-        p.canopy.radiation.APAR = plant_absorbed_ppfd(PAR, ρ_leaf, K, LAI, Ω)
-    end
-end
-
