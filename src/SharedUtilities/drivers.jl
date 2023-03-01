@@ -51,14 +51,14 @@ struct PrescribedAtmosphere{FT, LP, SP, TA, UA, QA, RA, CA} <:
     u::UA
     "Prescribed specific humidity (function of time)  at the reference height (_)"
     q::QA
-    "Prescribed air density (function of time)  at the reference height (kg/m^3)"
-    ρ::RA
+    "Prescribed air pressure (function of time)  at the reference height (Pa)"
+    P::RA
     "CO2 concentration in atmosphere (mol/mol)"
-    c::CA
+    c_co2::CA
     "Reference height, relative to surface elevation(m)"
     h::FT
-    function PrescribedAtmosphere(liquid_precip, snow_precip, T, u, q, ρ, c, h)
-        args = (liquid_precip, snow_precip, T, u, q, ρ, c)
+    function PrescribedAtmosphere(liquid_precip, snow_precip, T, u, q, P, c_co2, h)
+        args = (liquid_precip, snow_precip, T, u, q, P, c_co2)
         return new{typeof(h), typeof.(args)...}(args..., h)
     end
 
@@ -102,10 +102,10 @@ function construct_atmos_ts(
     t::FT,
     thermo_params,
 ) where {FT}
-    ρ::FT = atmos.ρ(t)
+    P::FT = atmos.P(t)
     T::FT = atmos.T(t)
     q::FT = atmos.q(t)
-    ts_in = Thermodynamics.PhaseEquil_ρTq(thermo_params, ρ, T, q)
+    ts_in = Thermodynamics.PhaseEquil_PTq(thermo_params, P, T, q)
     return ts_in
 end
 
@@ -230,7 +230,7 @@ struct PrescribedRadiativeFluxes{FT, SW, LW, TS} <: AbstractRadiativeDrivers{FT}
 end
 
 PrescribedRadiativeFluxes(FT, SW_d, LW_d, θs) =
-    PrescribedRadiativeFluxes{FT, typeof(SW_d), typeof(LW_d)}(SW_d, LW_d, θs)
+    PrescribedRadiativeFluxes{FT, typeof(SW_d), typeof(LW_d), typeof(θs)}(SW_d, LW_d, θs)
 
 
 

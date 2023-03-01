@@ -43,7 +43,6 @@ function plant_absorbed_ppfd(
     LAI::FT,
     Ω::FT,
 ) where {FT}
-
     APAR = PAR * (1 - ρ_leaf) * (1 - exp(-K * LAI * Ω))
     return APAR
 end

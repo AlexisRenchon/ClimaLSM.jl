@@ -8,20 +8,11 @@ using ClimaLSM
 using ClimaLSM: PrescribedAtmosphere, PrescribedRadiativeFluxes
 using ClimaLSM.Canopy
 using ClimaLSM.Canopy.PlantHydraulics
-using ClimaLSM.Domains: Point, Plane
+using ClimaLSM.Domains: Point
 include(joinpath(pkgdir(ClimaLSM), "parameters", "create_parameters.jl"))
 
 FT = Float64
-domains = [
-    Point(; z_sfc = FT(0.0)),
-    Plane(;
-        xlim = (0.0, 1.0),
-        ylim = (0.0, 1.0),
-        nelements = (2, 2),
-        periodic = (true, true),
-        npolynomial = 1,
-    ),
-]
+domain = Point(; z_sfc = FT(0.0))
 
 RTparams = BeerLambertParameters{FT}()
 photosynthesis_params = FarquharParameters{FT}(C3();)
@@ -32,38 +23,49 @@ photosynthesis_model = FarquharModel{FT}(photosynthesis_params)
 rt_model = BeerLambertModel{FT}(RTparams)
 
 earth_param_set = create_lsm_parameters(FT)
-LAI = FT(0.5)
+LAI = FT(2.0)
 shared_params = SharedCanopyParameters{FT, typeof(earth_param_set)}(LAI, earth_param_set)
 lat = FT(0.0)
 long = FT(0.0)
+
 function θs(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
     return FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
 end
 
 function SW_d(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
-    θs = FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
-    return cos(θs) * FT(500) # W/m^2
+    #θs = FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
+    return FT(1000) # W/m^2
 end
 
-function LW_d(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
-    θs = FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
-    return cos(θs) * FT(500) # W/m^2
+function LW_d(t::FT) where {FT}
+    return FT(200) # W/m^2
 end
 
-u(t) = t -> eltype(t)(3)
-function u(t)
-    return 3
-end
+u_atmos = t -> eltype(t)(3)
 
-T(t) = t -> eltype(t)(290)
-q(t) = t -> eltype(t)()
-atmos = PrescribedAtmos{FT}()
-radiation = PrescribedRadiativeFluxes{FT}()
+liquid_precip = (t) -> eltype(t)(0)
+snow_precip = (t) -> eltype(t)(0)
+T_atmos = t -> eltype(t)(290)
+q_atmos = t -> eltype(t)(0.01) # kg/kg
+P_atmos = t -> eltype(t)(1e5) # Pa
+h_atmos = FT(2)
+c_atmos = (t) -> eltype(t)(4.11e-4) # mol/mol
+atmos = PrescribedAtmosphere(
+            liquid_precip,
+            snow_precip,
+            T_atmos,
+            u_atmos,
+            q_atmos,
+            P_atmos,
+            c_atmos,
+            h_atmos,
+        )
+radiation = PrescribedRadiativeFluxes(FT, SW_d, LW_d, θs)
 
 # Plant Hydraulics
 RAI = FT(1) # m2/m2
 SAI = FT(1) # m2/m2
-LAI = FT(1) # m2/m2
+# we already defined LAI, above
 area_index = (root = RAI, stem = SAI, leaf = LAI)
 K_sat_plant = 1.8e-8 # m/s. Typical conductivity range is [1e-8, 1e-5] m/s. See Kumar, 2008 and
 # Pierre Gentine's database for total global plant conductance (1/resistance) 
@@ -95,7 +97,7 @@ compartment_surfaces =
     Vector(range(start = 0.0, step = Δz, stop = Δz * (n_stem + n_leaf)))
 earth_param_set = create_lsm_parameters(FT)
 
-plant_hydraulics_domain = domains[1]
+plant_hydraulics_domain = domain
 param_set = PlantHydraulics.PlantHydraulicsParameters{
     FT,
     typeof(earth_param_set),
@@ -130,22 +132,22 @@ plant_hydraulics = PlantHydraulics.PlantHydraulicsModel{FT}(;
                                                             compartment_surfaces = compartment_surfaces,
                                                             compartment_midpoints = compartment_midpoints,
                                                             )
-args = (shared_params, domains[1], rt_model, photosynthesis_model, stomatal_model, plant_hydraulics)
-typeargs = (rt_model, photosynthesis_model, stomatal_model, plant_hydraulics)
 canopy = ClimaLSM.Canopy.CanopyModel{FT}(; parameters = shared_params,
-                                         domain =domains[1],
+                                         domain = domain,
                                          radiative_transfer = rt_model,
                                          photosynthesis = photosynthesis_model,
                                          conductance = stomatal_model,
-                                         hydraulics = plant_hydraulics)
+                                         hydraulics = plant_hydraulics,
+                                         atmos = atmos,
+                                         radiation = radiation)
 Y,p,coords = ClimaLSM.initialize(canopy)
+Y.canopy.hydraulics[1] = plant_ν
+update_aux! = make_update_aux(canopy)
+t0 = FT(0.0)
+update_aux!(p,Y,t0)
 
-
-# 1. How to update the auxiliary variables for photosynthesis, RT, stomatal conductance (src)
-# 2. Ingest the drivers (atmospheric and radiation) (src)
-
-
-
+# 1. How to update the auxiliary variables for photosynthesis, RT, stomatal conductance (src) [X]
+# 2. Ingest the drivers (atmospheric and radiation) (src) [X]
 # 3. DiagnosticTranspiration -> sets the boundary condition for the hydraulics model with the right value (src)
 @show propertynames(Y.canopy)
 @show Y.canopy.hydraulics
