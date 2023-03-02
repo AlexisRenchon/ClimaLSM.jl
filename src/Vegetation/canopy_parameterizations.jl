@@ -476,6 +476,34 @@ function bulk_SW_albedo(
 end
 
 """
+    function bulk_LW_emissivity(
+                            ρ_leaf_sw::FT,
+                            α_soil::FT,
+                            K::FT,
+                            LAI::FT,
+                            Ω::FT,
+                            ) where {FT}
+
+Computes emissivity                            
+"""
+function bulk_LW_emissivity(
+    LAI::FT,
+    LAI_max::FT,
+    k_ϵ::FT,
+    fsnow::FT,
+    fground::FT,
+    ϵ_soil::FT,
+    ϵ_veg::FT,
+    ϵ_snow::FT,
+) where {FT}
+    ε_lai = (LAI/LAI_max)^(1/k_ϵ) * ε_veg             # Emissivity of vegetation as a function of LAI
+    ε_p = fsnow * ε_snow + (1.0 - fsnow) * ε_lai      # Emissivity of the snow-covered or vegetated surface
+    ε_LW = (1.0 - fveg) * ε_soil + fveg * ε_p         # Land surface longwave emissivity
+    return ϵ_LW  
+end
+
+
+"""
     canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
                           model::CanopyModel,
                           Y,
