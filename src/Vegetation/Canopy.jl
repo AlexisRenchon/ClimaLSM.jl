@@ -19,15 +19,14 @@ import ClimaLSM:
     
 using ClimaLSM.Domains: Point, Plane, SphericalSurface
 using DocStringExtensions
-export SharedCanopyParameters, CanopyModel
+export SharedCanopyParameters, CanopyModel, DiagnosticTranspiration
 include("./PlantHydraulics.jl")
 using .PlantHydraulics
 import .PlantHydraulics: transpiration, AbstractTranspiration
-include("./canopy_parameterizations.jl")
 include("./stomatalconductance.jl")
 include("./photosynthesis.jl")
 include("./radiation.jl")
-
+include("./canopy_parameterizations.jl")
 
 """
     SharedCanopyParameters{FT <: AbstractFloat, PSE}
@@ -80,8 +79,6 @@ function CanopyModel{FT}(;
     args = (radiative_transfer, photosynthesis, conductance, hydraulics,atmos, radiation, parameters, domain)
     return CanopyModel{FT, typeof.(args)...}(args...)
 end
-
-
 
 ClimaLSM.name(::CanopyModel) = :canopy
 ClimaLSM.domain(::CanopyModel) = :surface
@@ -148,11 +145,12 @@ function initialize_auxiliary(model::CanopyModel{FT}, coords::ClimaCore.Fields.F
     return p
 end
 
-function ClimaLSM.make_update_aux(canopy::CanopyModel{FT}) where {FT}
-    plant_hydraulics_update_aux! = make_update_aux(canopy.hydraulics)
+function ClimaLSM.make_update_aux(canopy::CanopyModel{FT,
+                                                 <: BeerLambertModel{FT},
+                                                 <: FarquharModel{FT},
+                                                 <: MedlynConductanceModel{FT},
+                                                 }) where {FT}
     function update_aux!(p, Y, t)
-        # update the plant hydraulics system
-        plant_hydraulics_update_aux!(p,Y,t)
         # unpack params
         earth_param_set = canopy.parameters.earth_param_set
         R = FT(LSMP.gas_constant(earth_param_set))
@@ -168,15 +166,16 @@ function ClimaLSM.make_update_aux(canopy::CanopyModel{FT}) where {FT}
         λ = FT(5e-7) # m (500 nm)
         energy_per_photon = h * c / λ
 
+        top_index = canopy.hydraulics.n_stem + canopy.hydraulics.n_leaf
         c_co2::FT = canopy.atmos.c_co2(t)
         P::FT = canopy.atmos.P(t)
         u::FT = canopy.atmos.u(t)
         T::FT = canopy.atmos.T(t)
         h::FT = canopy.atmos.h
         q::FT = canopy.atmos.q(t)
-        SW_d::FT = canopy.radiation.shortwave_radiation(t)
-        LW_d::FT = canopy.radiation.longwave_radiation(t)  
-        θs::FT  = canopy.radiation.zenith_angle(t)      
+        SW_d::FT = canopy.radiation.SW_d(t)
+        LW_d::FT = canopy.radiation.LW_d(t)  
+        θs::FT  = canopy.radiation.θs(t)      
         # atmos_ts = construct_atmos_ts(canopy.atmos, t, thermo_params)
         # compute VPD
         es = Thermodynamics.saturation_vapor_pressure.(Ref(thermo_params), T, Ref(Thermodynamics.Liquid()))
@@ -186,7 +185,7 @@ function ClimaLSM.make_update_aux(canopy::CanopyModel{FT}) where {FT}
 
         K = extinction_coeff.(ld, θs)
         APAR = plant_absorbed_ppfd.(PAR, ρ_leaf, K, LAI, Ω)   
-        β = moisture_stress.(p.canopy.hydraulics.ψ[1], sc, ψc) 
+        β = moisture_stress.(p.canopy.hydraulics.ψ[top_index], sc, ψc) 
         Jmax = max_electron_transport.(Vcmax25, ΔHJmax,T,To,R)
         J = electron_transport.(APAR, Jmax, θj, ϕ)
         Vcmax = compute_Vcmax.(Vcmax25, T, To, R, ΔHVcmax)
@@ -204,24 +203,106 @@ function ClimaLSM.make_update_aux(canopy::CanopyModel{FT}) where {FT}
         p.canopy.photosynthesis.GPP .= compute_GPP.(p.canopy.photosynthesis.An, K, LAI, Ω)
         p.canopy.conductance.gs .= medlyn_conductance.(g0, Drel, m, p.canopy.photosynthesis.An, c_co2)
         p.canopy.conductance.medlyn_term .= m
-
-        # compute transpiration and store in p so plant hydraulics can access it.
+        (transpiration, energy_fluxes) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t)
+        p.canopy.hydraulics.fa[top_index] .= transpiration
+        # note, confusingly, that the other aux variables for plant hydraulics are updated in the RHS
     end
+
+    return update_aux!
+end
+
+"""
+    canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
+                          model::CanopyModel,
+                          Y,
+                          p,
+                          t::FT) where {FT}
+
+Computes canopy transpiration 
+"""
+function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
+                               model::CanopyModel,
+                               Y,
+                               p,
+                               t::FT) where {FT}
+    # in the long run, we should pass r_sfc to surface_fluxes
+    # where it would be handle internally.
+    # but it doesn't do that, so we need to hack together something after
+    # the fact
+    # TODO: adjust latent heat flux for stomatal conductance
+    # E_potential = g_ae (q_sat(T_sfc) - q_atmos) 
+    # T = g_eff (q_sat(T_sfc) - q_atmos)  < E_potential
+
+    base_transpiration, turbulent_energy_flux, C_h = surface_fluxes(atmos, model, Y, p, t)
+    earth_param_set = model.parameters.earth_param_set
+    # here is where we adjust evaporation for stomatal conductance = 1/r_sfc
+    r_ae = 1/(C_h * abs(atmos.u(t))) # s/m
+    ρ_m = FT(LSMP.ρ_cloud_liq(earth_param_set) / LSMP.molar_mass_water(earth_param_set))
+
+    r_sfc = @. 1/(p.canopy.conductance.gs/ρ_m) # should be s/m
+    r_eff = r_ae .+ r_sfc
+    transpiration = @. base_transpiration*r_ae/r_eff
+    return transpiration, turbulent_energy_flux
 end
 
 
-function make_ode_function(canopy::CanopyModel)
-    components = canopy_components(canopy)
-    rhs_function_list = map(x -> make_rhs(getproperty(canopy, x)), components)
-    update_aux! = make_update_aux(canopy)
-    function ode_function!(dY, Y, p, t)
-        update_aux!(p, Y, t)
-        for f! in rhs_function_list
-            f!(dY, Y, p, t)
-        end
-    end
-    return ode_function!
+"""
+    ClimaLSM.surface_temperature(model::CanopyModel, Y, p, t)
+
+a helper function which returns the surface temperature for the canopy 
+model, which is stored in the aux state.
+"""
+function ClimaLSM.surface_temperature(model::CanopyModel, Y, p, t)
+    return model.atmos.T(t) 
 end
+
+"""
+    ClimaLSM.surface_temperature(model::CanopyModel, Y, p)
+
+a helper function which returns the surface specific humidity for the canopy 
+model, which is stored in the aux state.
+"""
+function ClimaLSM.surface_specific_humidity(model::CanopyModel, Y, p, T_sfc, ρ_sfc)
+    thermo_params = LSMP.thermodynamic_parameters(model.parameters.earth_param_set)
+    return Thermodynamics.q_vap_saturation_generic.(
+        Ref(thermo_params),
+        T_sfc,
+        ρ_sfc,
+        Ref(Thermodynamics.Liquid()),
+    )
+end
+
+"""
+    ClimaLSM.surface_temperature(model::CanopyModel, Y, p)
+    
+a helper function which computes and returns the surface air density for the canopy 
+model.
+"""
+function ClimaLSM.surface_air_density(
+    atmos::PrescribedAtmosphere,
+    model::CanopyModel,
+    Y,
+    p,
+    t,
+    T_sfc,
+)
+    thermo_params =
+        LSMP.thermodynamic_parameters(model.parameters.earth_param_set)
+    ts_in = construct_atmos_ts(atmos, t, thermo_params)
+    return compute_ρ_sfc.(Ref(thermo_params), Ref(ts_in), T_sfc)
+end
+
+"""
+    ClimaLSM.surface_temperature(model::CanopyModel, Y, p)
+
+a helper function which computes and returns the surface evaporative scaling
+ factor for the canopy model.
+"""
+function ClimaLSM.surface_evaporative_scaling(model::CanopyModel{FT}, Y, p) where {FT}
+    beta = FT(1.0)
+    return beta
+end
+
 
 
 """
@@ -233,12 +314,14 @@ diagnostically, as a function of prognostic variables and parameters
 """
 struct DiagnosticTranspiration{FT} <: AbstractTranspiration{FT} end
 function transpiration(
-    transpiration::DiagnosticTranspiration{FT},
-    t::FT,
+    transpiration::DiagnosticTranspiration,
+    t,
     Y,
     p
-)::FT where {FT}
-#    return the correct value!
+)
+
+   @inbounds return p.canopy.hydraulics.fa[length(propertynames(p.canopy.hydraulics.fa))]
 end
+
 
 end

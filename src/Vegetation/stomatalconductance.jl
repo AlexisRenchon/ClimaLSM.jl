@@ -41,5 +41,5 @@ struct MedlynConductanceModel{FT} <: AbstractStomatalConductanceModel{FT}
 end
 
 ClimaLSM.name(model::AbstractStomatalConductanceModel) = :conductance
-ClimaLSM.auxiliary_vars(model::MedlynConductanceModel) = (:medlyn_term,:gs,)
-ClimaLSM.auxiliary_types(model::MedlynConductanceModel{FT}) where {FT} = (FT,FT,)
+ClimaLSM.auxiliary_vars(model::MedlynConductanceModel) = (:medlyn_term,:gs)
+ClimaLSM.auxiliary_types(model::MedlynConductanceModel{FT}) where {FT} = (FT,FT)

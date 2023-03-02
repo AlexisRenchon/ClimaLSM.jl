@@ -470,7 +470,7 @@ function make_rhs(model::PlantHydraulicsModel)
                     ) / 2
             else  # Apply upper boundary condition * area index
                 fa[i] .=
-                    transpiration(model.transpiration, t) .* area_index[:leaf]
+                    transpiration(model.transpiration, t, Y, p) .* area_index[:leaf]
             end
 
             if i == 1

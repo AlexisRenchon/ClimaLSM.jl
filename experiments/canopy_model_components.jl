@@ -119,8 +119,8 @@ function leaf_transpiration(t::FT) where {FT}
 end
 
 ψ_soil0 = FT(0.0)
-transpiration =
-    PrescribedTranspiration{FT}((t::FT) -> leaf_transpiration(t))
+transpiration =DiagnosticTranspiration{FT}()
+    #PrescribedTranspiration{FT}((t::FT) -> leaf_transpiration(t))
 root_extraction = PrescribedSoilPressure{FT}((t::FT) -> ψ_soil0)
 
 plant_hydraulics = PlantHydraulics.PlantHydraulicsModel{FT}(;
@@ -152,12 +152,10 @@ update_aux!(p,Y,t0)
 # 2. Ingest the drivers (atmospheric and radiation) (src) [X]
 # 3. DiagnosticTranspiration -> sets the boundary condition for the hydraulics model with the right value (src)
 @show propertynames(Y.canopy)
-@show Y.canopy.hydraulics
-@show propertynames(p.canopy)
-@show p.canopy.hydraulics
-@show p.canopy.conductance
-@show p.canopy.photosynthesis
-@show p.canopy.radiative_transfer
+@show propertynames(Y.canopy.hydraulics),Y.canopy.hydraulics
 
-#C_d * |u| = g_ae -> g_eff
-ClimaLSM.Canopy.canopy_surface_fluxes(canopy.atmos, canopy, Y, p, FT(0.0))
+@show propertynames(p.canopy)
+@show propertynames(p.canopy.hydraulics), p.canopy.hydraulics
+@show propertynames(p.canopy.conductance),p.canopy.conductance
+@show propertynames(p.canopy.photosynthesis),p.canopy.photosynthesis
+@show propertynames(p.canopy.radiative_transfer),p.canopy.radiative_transfer

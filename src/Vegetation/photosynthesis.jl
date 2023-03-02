@@ -1,4 +1,19 @@
-export FarquharParameters, FarquharModel
+export FarquharParameters, FarquharModel, C3, C4
+
+abstract type AbstractPhotosynthesisMechanism end
+"""
+    C3 <: AbstractPhotosynthesisMechanism
+
+Helper struct for dispatching between C3 and C4 photosynthesis.
+"""
+struct C3 <: AbstractPhotosynthesisMechanism end
+
+"""
+    C4 <: AbstractPhotosynthesisMechanism
+
+Helper struct for dispatching between C3 and C4 photosynthesis.
+"""
+struct C4 <: AbstractPhotosynthesisMechanism end
 
 abstract type AbstractPhotosynthesisModel{FT} <: AbstractModel{FT} end
 
