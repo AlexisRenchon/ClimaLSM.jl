@@ -161,7 +161,7 @@ function ClimaLSM.make_update_aux(canopy::CanopyModel{FT}) where {FT}
         N_a = FT(LSMP.avogadro_constant(earth_param_set))
         thermo_params = canopy.parameters.earth_param_set.thermo_params
 
-        (; Vcmax25, Γstar25, ΔHJmax, ΔHVcmax, ΔHΓstar, f, ΔHRd, To, θj, ϕ, mechanism, sc, ψc, oi, Kc25, Ko25, ΔHkc, ΔHko) = canopy.photosynthesis.parameters
+        (; Vcmax25, Γstar25, ΔHJmax, ΔHVcmax, ΔHΓstar, f, ΔHRd, To, θj, ϕ, mechanism, sc, ψc, oi, Kc25, Ko25, ΔHkc, ΔHko) = canopy.photosynthesis.parameters 
         (; g1, g0, Drel) = canopy.conductance.parameters
         (; ld, Ω, ρ_leaf) = canopy.radiative_transfer.parameters
         (; LAI) = canopy.parameters
@@ -174,9 +174,9 @@ function ClimaLSM.make_update_aux(canopy::CanopyModel{FT}) where {FT}
         T::FT = canopy.atmos.T(t)
         h::FT = canopy.atmos.h
         q::FT = canopy.atmos.q(t)
-        SW_d::FT = canopy.radiation.SW_d(t)
-        LW_d::FT = canopy.radiation.LW_d(t)  
-        θs::FT  = canopy.radiation.θs(t)      
+        SW_d::FT = canopy.radiation.shortwave_radiation(t)
+        LW_d::FT = canopy.radiation.longwave_radiation(t)  
+        θs::FT  = canopy.radiation.zenith_angle(t)      
         # atmos_ts = construct_atmos_ts(canopy.atmos, t, thermo_params)
         # compute VPD
         es = Thermodynamics.saturation_vapor_pressure.(Ref(thermo_params), T, Ref(Thermodynamics.Liquid()))

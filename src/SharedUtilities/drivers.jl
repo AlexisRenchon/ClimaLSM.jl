@@ -105,7 +105,7 @@ function construct_atmos_ts(
     P::FT = atmos.P(t)
     T::FT = atmos.T(t)
     q::FT = atmos.q(t)
-    ts_in = Thermodynamics.PhaseEquil_PTq(thermo_params, P, T, q)
+    ts_in = Thermodynamics.PhaseEquil_pTq(thermo_params, P, T, q)
     return ts_in
 end
 
@@ -133,7 +133,7 @@ function surface_fluxes(
     p::ClimaCore.Fields.FieldVector,
     t::FT,
 ) where {FT <: AbstractFloat}
-    T_sfc = surface_temperature(model, Y, p)
+    T_sfc = surface_temperature(model, Y, p, t)
     ρ_sfc = surface_air_density(atmos, model, Y, p, t, T_sfc)
     q_sfc = surface_specific_humidity(model, Y, p, T_sfc, ρ_sfc)
     β_sfc = surface_evaporative_scaling(model, Y, p)
@@ -147,7 +147,6 @@ function surface_fluxes(
         Ref(atmos),
     )
 end
-
 """
     surface_fluxes_at_a_point(T_sfc::FT,
                               q_sfc::FT,
@@ -210,7 +209,7 @@ function surface_fluxes_at_a_point(
     return (
         turbulent_energy_flux = conditions.lhf .+ conditions.shf,
         evaporation = evaporation,
-        C_h = conditions.C_h
+        Ch = conditions.Ch
     )
 end
 
@@ -298,7 +297,7 @@ Extending this function for your model is only necessary if you need to
 compute surface fluxes and radiative fluxes at the surface using
 the functions in this file.
 """
-function surface_temperature(model::AbstractModel, Y, p) end
+function surface_temperature(model::AbstractModel, Y, p, t) end
 
 """
     surface_air_density(

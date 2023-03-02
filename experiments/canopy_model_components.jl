@@ -11,7 +11,7 @@ using ClimaLSM.Canopy.PlantHydraulics
 using ClimaLSM.Domains: Point
 include(joinpath(pkgdir(ClimaLSM), "parameters", "create_parameters.jl"))
 
-FT = Float64
+FT = Float64 
 domain = Point(; z_sfc = FT(0.0))
 
 RTparams = BeerLambertParameters{FT}()
@@ -23,21 +23,23 @@ photosynthesis_model = FarquharModel{FT}(photosynthesis_params)
 rt_model = BeerLambertModel{FT}(RTparams)
 
 earth_param_set = create_lsm_parameters(FT)
-LAI = FT(2.0)
-shared_params = SharedCanopyParameters{FT, typeof(earth_param_set)}(LAI, earth_param_set)
+LAI = FT(8.0)
+z_0m = FT(3.0) # 10% of a 30m canopy
+z_0b = FT(3.0)
+shared_params = SharedCanopyParameters{FT, typeof(earth_param_set)}(LAI, z_0m, z_0b, earth_param_set)
 lat = FT(0.0)
-long = FT(0.0)
+long = FT(-180)
 
-function θs(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
+function zenith_angle(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}    
     return FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
 end
 
-function SW_d(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
+function shortwave_radiation(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}
     #θs = FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
     return FT(1000) # W/m^2
 end
 
-function LW_d(t::FT) where {FT}
+function longwave_radiation(t::FT) where {FT}
     return FT(200) # W/m^2
 end
 
@@ -60,7 +62,7 @@ atmos = PrescribedAtmosphere(
             c_atmos,
             h_atmos,
         )
-radiation = PrescribedRadiativeFluxes(FT, SW_d, LW_d, θs)
+radiation = PrescribedRadiativeFluxes(FT, shortwave_radiation, longwave_radiation, zenith_angle)
 
 # Plant Hydraulics
 RAI = FT(1) # m2/m2
@@ -158,3 +160,4 @@ update_aux!(p,Y,t0)
 @show p.canopy.radiative_transfer
 
 #C_d * |u| = g_ae -> g_eff
+ClimaLSM.Canopy.canopy_surface_fluxes(canopy.atmos, canopy, Y, p, FT(0.0))

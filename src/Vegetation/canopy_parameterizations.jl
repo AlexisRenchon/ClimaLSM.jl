@@ -1,3 +1,8 @@
+import ClimaLSM.surface_temperature,
+    ClimaLSM.surface_specific_humidity,
+    ClimaLSM.surface_air_density,
+    ClimaLSM.surface_evaporative_scaling
+    
 export plant_absorbed_ppfd,
     extinction_coeff,
     arrhenius_function,
@@ -18,6 +23,8 @@ export plant_absorbed_ppfd,
     compute_Vcmax,
     medlyn_term,
     medlyn_conductance,
+    bulk_SW_albedo,
+    canopy_surface_fluxes
 
 # 1. Radiative transfer
 
@@ -446,6 +453,17 @@ function medlyn_conductance(
     return gs
 end
 
+"""
+    function bulk_SW_albedo(
+                            ρ_leaf_sw::FT,
+                            α_soil::FT,
+                            K::FT,
+                            LAI::FT,
+                            Ω::FT,
+                            ) where {FT}
+
+Computes albedo                            
+"""
 function bulk_SW_albedo(
     ρ_leaf_sw::FT,
     α_soil::FT,
@@ -457,6 +475,15 @@ function bulk_SW_albedo(
     return α_SW 
 end
 
+"""
+    canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
+                          model::CanopyModel,
+                          Y,
+                          p,
+                          t::FT) where {FT}
+
+Computes canopy transpiration 
+"""
 function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
                                model::CanopyModel,
                                Y,
@@ -466,14 +493,76 @@ function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
     # where it would be handle internally.
     # but it doesn't do that, so we need to hack together something after
     # the fact
+    # TODO: adjust latent heat flux for stomatal conductance
+    # E_potential = g_ae (q_sat(T_sfc) - q_atmos) 
+    # T = g_eff (q_sat(T_sfc) - q_atmos)  < E_potential
+
     base_transpiration, turbulent_energy_flux, C_h = surface_fluxes(atmos, model, Y, p, t)
     earth_param_set = model.parameters.earth_param_set
     # here is where we adjust evaporation for stomatal conductance = 1/r_sfc
     r_ae = 1/(C_h * abs(atmos.u(t)))
-    ρ_m = FT(LSMP.ρ_cloud_liq(earth_param_set) / LSMP.molmass_water(earth_param_set))
+    ρ_m = FT(LSMP.ρ_cloud_liq(earth_param_set) / LSMP.molar_mass_water(earth_param_set))
 
-    r_sfc = 1/(p.canopy.conductance.gs/ρ_m)
-    r_eff = r_ae + r_sfc
-    transpiration = base_transpiration*r_ae/r_eff
+    r_sfc = @. 1/(p.canopy.conductance.gs/ρ_m)
+    r_eff = r_ae .+ r_sfc
+    transpiration = @. base_transpiration*r_ae/r_eff
     return transpiration, turbulent_energy_flux
+end
+
+
+"""
+    ClimaLSM.surface_temperature(model::CanopyModel, Y, p, t)
+
+a helper function which returns the surface temperature for the canopy 
+model, which is stored in the aux state.
+"""
+function ClimaLSM.surface_temperature(model::CanopyModel, Y, p, t)
+    return model.atmos.T(t) 
+end
+
+"""
+    ClimaLSM.surface_temperature(model::CanopyModel, Y, p)
+
+a helper function which returns the surface specific humidity for the canopy 
+model, which is stored in the aux state.
+"""
+function ClimaLSM.surface_specific_humidity(model::CanopyModel, Y, p, T_sfc, ρ_sfc)
+    thermo_params = LSMP.thermodynamic_parameters(model.parameters.earth_param_set)
+    return Thermodynamics.q_vap_saturation_generic.(
+        Ref(thermo_params),
+        T_sfc,
+        ρ_sfc,
+        Ref(Thermodynamics.Liquid()),
+    )
+end
+
+"""
+    ClimaLSM.surface_temperature(model::CanopyModel, Y, p)
+    
+a helper function which computes and returns the surface air density for the canopy 
+model.
+"""
+function ClimaLSM.surface_air_density(
+    atmos::PrescribedAtmosphere,
+    model::CanopyModel,
+    Y,
+    p,
+    t,
+    T_sfc,
+)
+    thermo_params =
+        LSMP.thermodynamic_parameters(model.parameters.earth_param_set)
+    ts_in = construct_atmos_ts(atmos, t, thermo_params)
+    return compute_ρ_sfc.(Ref(thermo_params), Ref(ts_in), T_sfc)
+end
+
+"""
+    ClimaLSM.surface_temperature(model::CanopyModel, Y, p)
+
+a helper function which computes and returns the surface evaporative scaling
+ factor for the canopy model.
+"""
+function ClimaLSM.surface_evaporative_scaling(model::CanopyModel{FT}, Y, p) where {FT}
+    beta = FT(1.0)
+    return beta
 end
