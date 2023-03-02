@@ -17,7 +17,7 @@ export plant_absorbed_ppfd,
     MM_Ko,
     compute_Vcmax,
     medlyn_term,
-    medlyn_conductance
+    medlyn_conductance,
 
 # 1. Radiative transfer
 
@@ -444,4 +444,36 @@ function medlyn_conductance(
 ) where {FT}
     gs = g0 + Drel * medlyn_term * (An / ca)
     return gs
+end
+
+function bulk_SW_albedo(
+    ρ_leaf_sw::FT,
+    α_soil::FT,
+    K::FT,
+    LAI::FT,
+    Ω::FT,
+) where {FT}
+    α_SW = α_soil * exp(-K * LAI * Ω) + ρ_leaf_sw * (1 - exp(-K * LAI * Ω))
+    return α_SW 
+end
+
+function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
+                               model::CanopyModel,
+                               Y,
+                               p,
+                               t::FT) where {FT}
+    # in the long run, we should pass r_sfc to surface_fluxes
+    # where it would be handle internally.
+    # but it doesn't do that, so we need to hack together something after
+    # the fact
+    base_transpiration, turbulent_energy_flux, C_h = surface_fluxes(atmos, model, Y, p, t)
+    earth_param_set = model.parameters.earth_param_set
+    # here is where we adjust evaporation for stomatal conductance = 1/r_sfc
+    r_ae = 1/(C_h * abs(atmos.u(t)))
+    ρ_m = FT(LSMP.ρ_cloud_liq(earth_param_set) / LSMP.molmass_water(earth_param_set))
+
+    r_sfc = 1/(p.canopy.conductance.gs/ρ_m)
+    r_eff = r_ae + r_sfc
+    transpiration = base_transpiration*r_ae/r_eff
+    return transpiration, turbulent_energy_flux
 end

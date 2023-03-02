@@ -210,6 +210,7 @@ function surface_fluxes_at_a_point(
     return (
         turbulent_energy_flux = conditions.lhf .+ conditions.shf,
         evaporation = evaporation,
+        C_h = conditions.C_h
     )
 end
 
