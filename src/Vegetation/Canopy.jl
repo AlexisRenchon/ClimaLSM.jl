@@ -146,10 +146,11 @@ function initialize_auxiliary(model::CanopyModel{FT}, coords::ClimaCore.Fields.F
 end
 
 function ClimaLSM.make_update_aux(canopy::CanopyModel{FT,
-                                                 <: BeerLambertModel{FT},
-                                                 <: FarquharModel{FT},
-                                                 <: MedlynConductanceModel{FT},
-                                                 }) where {FT}
+                                                      <: BeerLambertModel,
+                                                      <: FarquharModel,
+                                                      <: MedlynConductanceModel,
+                                                      <: PlantHydraulicsModel 
+                                                      }) where {FT}
     function update_aux!(p, Y, t)
         # unpack params
         earth_param_set = canopy.parameters.earth_param_set
@@ -209,6 +210,19 @@ function ClimaLSM.make_update_aux(canopy::CanopyModel{FT,
     end
 
     return update_aux!
+end
+
+function make_ode_function(canopy::CanopyModel)
+    components = canopy_components(canopy)
+    rhs_function_list = map(x -> make_rhs(getproperty(canopy, x)), components)
+    update_aux! = make_update_aux(canopy)
+    function ode_function!(dY, Y, p, t)
+        update_aux!(p, Y, t)
+        for f! in rhs_function_list
+            f!(dY, Y, p, t)
+        end
+    end
+    return ode_function!
 end
 
 """

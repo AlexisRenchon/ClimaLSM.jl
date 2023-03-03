@@ -88,14 +88,14 @@ end
 Δz = FT(1.0) # height of compartments
 n_stem = Int64(0) # number of stem elements
 n_leaf = Int64(1) # number of leaf elements
-compartment_midpoints = Vector(
+compartment_centers = Vector(
     range(
         start = Δz / 2,
         step = Δz,
         stop = Δz * (n_stem + n_leaf) - (Δz / 2),
     ),
 )
-compartment_surfaces =
+compartment_faces =
     Vector(range(start = 0.0, step = Δz, stop = Δz * (n_stem + n_leaf)))
 earth_param_set = create_lsm_parameters(FT)
 
@@ -131,8 +131,8 @@ plant_hydraulics = PlantHydraulics.PlantHydraulicsModel{FT}(;
                                                             root_depths = root_depths,
                                                             n_stem = n_stem,
                                                             n_leaf = n_leaf,
-                                                            compartment_surfaces = compartment_surfaces,
-                                                            compartment_midpoints = compartment_midpoints,
+                                                            compartment_surfaces = compartment_faces,
+                                                            compartment_midpoints = compartment_centers,
                                                             )
 canopy = ClimaLSM.Canopy.CanopyModel{FT}(; parameters = shared_params,
                                          domain = domain,
@@ -150,7 +150,7 @@ update_aux!(p,Y,t0)
 
 # 1. How to update the auxiliary variables for photosynthesis, RT, stomatal conductance (src) [X]
 # 2. Ingest the drivers (atmospheric and radiation) (src) [X]
-# 3. DiagnosticTranspiration -> sets the boundary condition for the hydraulics model with the right value (src)
+# 3. DiagnosticTranspiration -> sets the boundary condition for the hydraulics model with the right value (src) [x]
 @show propertynames(Y.canopy)
 @show propertynames(Y.canopy.hydraulics),Y.canopy.hydraulics
 
@@ -159,3 +159,12 @@ update_aux!(p,Y,t0)
 @show propertynames(p.canopy.conductance),p.canopy.conductance
 @show propertynames(p.canopy.photosynthesis),p.canopy.photosynthesis
 @show propertynames(p.canopy.radiative_transfer),p.canopy.radiative_transfer
+
+
+# The function needed for timestepping
+ode_function! = make_ode_function(canopy)
+dY = similar(Y)
+ode_function!(dY,Y,p,t0)
+
+#TODO:
+ # carefully test all of the pipes and make sure everything is updated when we think it is   
