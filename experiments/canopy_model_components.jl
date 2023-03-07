@@ -24,9 +24,12 @@ rt_model = BeerLambertModel{FT}(RTparams)
 
 earth_param_set = create_lsm_parameters(FT)
 LAI = FT(8.0)
-z_0m = FT(3.0) # 10% of a 30m canopy
-z_0b = FT(3.0)
-shared_params = SharedCanopyParameters{FT, typeof(earth_param_set)}(LAI, z_0m, z_0b, earth_param_set)
+z_0m = FT(2.0) # Roughness length for momentum - value from tall forest ChatGPT
+z_0b = FT(0.1) # Roughness length for scalars - value from tall forest ChatGPT
+h_c = FT(20.0) # canopy height in m
+h_sfc = FT(20.0) # sfc, for now, top of canopy, 20 m
+h_int = FT(30.0) # int, for now, where measurements would be taken at a typical flux tower of a 20m canopy, 30m 
+shared_params = SharedCanopyParameters{FT, typeof(earth_param_set)}(LAI, h_c, z_0m, z_0b, earth_param_set)
 lat = FT(0.0)
 long = FT(-180)
 
@@ -48,9 +51,9 @@ u_atmos = t -> eltype(t)(3)
 liquid_precip = (t) -> eltype(t)(0)
 snow_precip = (t) -> eltype(t)(0)
 T_atmos = t -> eltype(t)(290)
-q_atmos = t -> eltype(t)(0.01) # kg/kg
+q_atmos = t -> eltype(t)(0.001) # kg/kg
 P_atmos = t -> eltype(t)(1e5) # Pa
-h_atmos = FT(2)
+h_atmos = h_int
 c_atmos = (t) -> eltype(t)(4.11e-4) # mol/mol
 atmos = PrescribedAtmosphere(
             liquid_precip,
@@ -65,8 +68,8 @@ atmos = PrescribedAtmosphere(
 radiation = PrescribedRadiativeFluxes(FT, shortwave_radiation, longwave_radiation, zenith_angle)
 
 # Plant Hydraulics
-RAI = FT(1) # m2/m2
-SAI = FT(1) # m2/m2
+RAI = FT(1) # root area index, m2/m2
+SAI = FT(1) # stem area index, m2/m2 TODO: this needs to be consistent with the radiative transfer model
 # we already defined LAI, above
 area_index = (root = RAI, stem = SAI, leaf = LAI)
 K_sat_plant = 1.8e-8 # m/s. Typical conductivity range is [1e-8, 1e-5] m/s. See Kumar, 2008 and

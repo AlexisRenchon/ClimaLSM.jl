@@ -137,11 +137,13 @@ function surface_fluxes(
     ρ_sfc = surface_air_density(atmos, model, Y, p, t, T_sfc)
     q_sfc = surface_specific_humidity(model, Y, p, T_sfc, ρ_sfc)
     β_sfc = surface_evaporative_scaling(model, Y, p)
+    h_sfc = surface_height(model)
     return surface_fluxes_at_a_point.(
         T_sfc,
         q_sfc,
         ρ_sfc,
         β_sfc,
+        h_sfc,
         t,
         Ref(model.parameters),
         Ref(atmos),
@@ -173,6 +175,7 @@ function surface_fluxes_at_a_point(
     q_sfc::FT,
     ρ_sfc::FT,
     β_sfc::FT,
+    h_sfc::FT,
     t::FT,
     parameters::P,
     atmos::PA,
@@ -187,8 +190,7 @@ function surface_fluxes_at_a_point(
     ts_in = construct_atmos_ts(atmos, t, thermo_params)
     ts_sfc = Thermodynamics.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
 
-    # h is relative to surface height, so we can set surface height to zero.
-    state_sfc = SurfaceFluxes.SurfaceValues(FT(0), SVector{2, FT}(0, 0), ts_sfc)
+    state_sfc = SurfaceFluxes.SurfaceValues(h_sfc, SVector{2, FT}(0, 0), ts_sfc)
     state_in = SurfaceFluxes.InteriorValues(h, SVector{2, FT}(u, 0), ts_in)
 
     # State containers
@@ -203,12 +205,13 @@ function surface_fluxes_at_a_point(
     conditions = SurfaceFluxes.surface_conditions(surface_flux_params, sc)
 
     # Land needs a volume flux of water, not mass flux
-    evaporation =
+    vapor_flux =
         SurfaceFluxes.evaporation(surface_flux_params, sc, conditions.Ch) /
         _ρ_liq
     return (
-        turbulent_energy_flux = conditions.lhf .+ conditions.shf,
-        evaporation = evaporation,
+        latent_heat_flux = conditions.lhf,
+        sensible_heat_flux = conditions.shf,
+        vapor_flux = vapor_flux,
         Ch = conditions.Ch
     )
 end
@@ -342,6 +345,8 @@ compute surface fluxes and radiative fluxes at the surface using
 the functions in this file.
 """
 function surface_specific_humidity(model::AbstractModel, Y, p, T_sfc, ρ_sfc) end
+
+function surface_height(model::AbstractModel) end
 
 """
     surface_evaporative_scaling(model::AbstractModel, Y, p)

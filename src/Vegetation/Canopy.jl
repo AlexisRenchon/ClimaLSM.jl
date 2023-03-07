@@ -37,8 +37,8 @@ $(DocStringExtensions.FIELDS)
 struct SharedCanopyParameters{FT <: AbstractFloat, PSE}
     "Leaf Area Index"
     LAI::FT
-    # "Canopy height"
-    # h_c::FT
+    "Canopy height"
+    h_c::FT
     #"Rate of change of roughness length for momentum with canopy height"
     # ω_m::FT
     "Roughness length for momentum"
@@ -204,11 +204,10 @@ function ClimaLSM.make_update_aux(canopy::CanopyModel{FT,
         p.canopy.photosynthesis.GPP .= compute_GPP.(p.canopy.photosynthesis.An, K, LAI, Ω)
         p.canopy.conductance.gs .= medlyn_conductance.(g0, Drel, m, p.canopy.photosynthesis.An, c_co2)
         p.canopy.conductance.medlyn_term .= m
-        (transpiration, energy_fluxes) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t)
+        (transpiration, shf, lhf) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t)
         p.canopy.hydraulics.fa[top_index] .= transpiration
         # note, confusingly, that the other aux variables for plant hydraulics are updated in the RHS
     end
-
     return update_aux!
 end
 
@@ -247,7 +246,7 @@ function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
     # E_potential = g_ae (q_sat(T_sfc) - q_atmos) 
     # T = g_eff (q_sat(T_sfc) - q_atmos)  < E_potential
 
-    base_transpiration, turbulent_energy_flux, C_h = surface_fluxes(atmos, model, Y, p, t)
+    base_lhf, shf, base_transpiration, C_h = surface_fluxes(atmos, model, Y, p, t)
     earth_param_set = model.parameters.earth_param_set
     # here is where we adjust evaporation for stomatal conductance = 1/r_sfc
     r_ae = 1/(C_h * abs(atmos.u(t))) # s/m
@@ -256,7 +255,10 @@ function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
     r_sfc = @. 1/(p.canopy.conductance.gs/ρ_m) # should be s/m
     r_eff = r_ae .+ r_sfc
     transpiration = @. base_transpiration*r_ae/r_eff
-    return transpiration, turbulent_energy_flux
+
+    # we also need to correct the LHF
+    lhf = @. base_lhf *r_ae/r_eff
+    return transpiration, shf, lhf
 end
 
 
@@ -268,6 +270,10 @@ model, which is stored in the aux state.
 """
 function ClimaLSM.surface_temperature(model::CanopyModel, Y, p, t)
     return model.atmos.T(t) 
+end
+
+function ClimaLSM.surface_height(model::CanopyModel)
+    return model.parameters.h_c 
 end
 
 """
