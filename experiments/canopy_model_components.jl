@@ -46,7 +46,7 @@ function longwave_radiation(t::FT) where {FT}
     return FT(200) # W/m^2
 end
 
-u_atmos = t -> eltype(t)(3)
+u_atmos = t -> eltype(t)(10) #m.s-1
 
 liquid_precip = (t) -> eltype(t)(0) # m
 snow_precip = (t) -> eltype(t)(0) # m
@@ -117,13 +117,9 @@ param_set = PlantHydraulics.PlantHydraulicsParameters{
     root_distribution,
     earth_param_set,
 )
-function leaf_transpiration(t::FT) where {FT}
-    T = FT(0)
-end
 
 ψ_soil0 = FT(0.0)
-transpiration =DiagnosticTranspiration{FT}()
-    #PrescribedTranspiration{FT}((t::FT) -> leaf_transpiration(t))
+transpiration = DiagnosticTranspiration{FT}()
 root_extraction = PrescribedSoilPressure{FT}((t::FT) -> ψ_soil0)
 
 plant_hydraulics = PlantHydraulics.PlantHydraulicsModel{FT}(;
@@ -163,9 +159,9 @@ parent(p.canopy.conductance.medlyn_term)
 parent(p.canopy.conductance.gs)
 parent(p.canopy.radiative_transfer.apar) * 1e6
 
-(transpiration, shf, lhf) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t0)
+(evapotranspiration, shf, lhf) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t0)
 
-parent(transpiration)
+parent(evapotranspiration) * 1000 * 3600 * 24 # [] - (mm d-1) 
 shf # note shf is a different type (not Float64-valued Field, but Float64) 
 parent(lhf) 
 

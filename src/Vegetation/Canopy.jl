@@ -204,8 +204,8 @@ function ClimaLSM.make_update_aux(canopy::CanopyModel{FT,
         p.canopy.photosynthesis.GPP .= compute_GPP.(p.canopy.photosynthesis.An, K, LAI, Ω)
         p.canopy.conductance.gs .= medlyn_conductance.(g0, Drel, m, p.canopy.photosynthesis.An, c_co2)
         p.canopy.conductance.medlyn_term .= m
-        (transpiration, shf, lhf) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t)
-        p.canopy.hydraulics.fa[top_index] .= transpiration
+        (evapotranspiration, shf, lhf) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t)
+        p.canopy.hydraulics.fa[top_index] .= evapotranspiration
         # note, confusingly, that the other aux variables for plant hydraulics are updated in the RHS
     end
     return update_aux!
@@ -246,19 +246,21 @@ function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
     # E_potential = g_ae (q_sat(T_sfc) - q_atmos) 
     # T = g_eff (q_sat(T_sfc) - q_atmos)  < E_potential
 
-    base_lhf, shf, base_transpiration, C_h = surface_fluxes(atmos, model, Y, p, t)
+    base_lhf, shf, base_transpiration, C_h = surface_fluxes(atmos, model, Y, p, t) #Per unit m^2 of leaf
     earth_param_set = model.parameters.earth_param_set
     # here is where we adjust evaporation for stomatal conductance = 1/r_sfc
     r_ae = 1/(C_h * abs(atmos.u(t))) # s/m
     ρ_m = FT(LSMP.ρ_cloud_liq(earth_param_set) / LSMP.molar_mass_water(earth_param_set))
 
-    r_sfc = @. 1/(p.canopy.conductance.gs/ρ_m) # should be s/m
+    leaf_conductance = p.canopy.conductance.gs
+    canopy_conductance = upscale_leaf_conductance.(leaf_conductance, model.parameters.LAI)
+    r_sfc = @. 1/(canopy_conductance/ρ_m) # should be s/m
     r_eff = r_ae .+ r_sfc
-    transpiration = @. base_transpiration*r_ae/r_eff
+    canopy_transpiration = @. base_transpiration*r_ae/r_eff
 
     # we also need to correct the LHF
-    lhf = @. base_lhf *r_ae/r_eff
-    return transpiration, shf, lhf
+    canopy_lhf = @. base_lhf *r_ae/r_eff
+    return canopy_transpiration, shf, canopy_lhf
 end
 
 

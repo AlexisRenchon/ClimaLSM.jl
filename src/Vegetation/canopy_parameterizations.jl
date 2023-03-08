@@ -22,7 +22,8 @@ export plant_absorbed_ppfd,
     medlyn_term,
     medlyn_conductance,
     bulk_SW_albedo,
-    canopy_surface_fluxes
+    canopy_surface_fluxes,
+    upscale_leaf_conductance
 
 # 1. Radiative transfer
 
@@ -312,6 +313,19 @@ function compute_GPP(An::FT, K::FT, LAI::FT, Ω::FT) where {FT}
     return GPP
 end
 
+
+#=
+# future todo: check what CLM does - can we use the same function for GPP from An
+# and canopy transpiration from leaf transpiration?
+=#
+"""
+
+"""
+function upscale_leaf_conductance(gs::FT, LAI::FT) where {FT}
+    canopy_conductance = gs * LAI
+    return canopy_conductance
+end
+
 """
    arrhenius_function(T::FT, To::FT, R::FT, ΔH::FT)
 
@@ -483,3 +497,4 @@ function bulk_LW_emissivity(
     ε_LW = (1.0 - fveg) * ε_soil + fveg * ε_p         # Land surface longwave emissivity
     return ϵ_LW  
 end
+ 
