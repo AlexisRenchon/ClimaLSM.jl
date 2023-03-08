@@ -154,9 +154,20 @@ update_aux!(p,Y,t0)
 
 # Check values:
 # If we write a unit test for this, should we give a range?
-parent(p.canopy.photosynthesis.An) * 1e6 # should be around 10 (umol CO2 m-2 s-1)
-parent(p.canopy.photosynthesis.GPP) * 1e6
+# [expected value] - (units)
+parent(p.canopy.photosynthesis.An) * 1e6 # [10] - (umol CO2 m-2 s-1)
+parent(p.canopy.photosynthesis.GPP) * 1e6 # [expected value], (units)
+parent(p.canopy.hydraulics.ψ)
+parent(p.canopy.hydraulics.fa)
+parent(p.canopy.conductance.medlyn_term)
+parent(p.canopy.conductance.gs)
+parent(p.canopy.radiative_transfer.apar) * 1e6
 
+(transpiration, shf, lhf) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t0)
+
+parent(transpiration)
+shf # note shf is a different type (not Float64-valued Field, but Float64) 
+parent(lhf) 
 
 
 
