@@ -23,15 +23,15 @@ photosynthesis_model = FarquharModel{FT}(photosynthesis_params)
 rt_model = BeerLambertModel{FT}(RTparams)
 
 earth_param_set = create_lsm_parameters(FT)
-LAI = FT(8.0)
-z_0m = FT(2.0) # Roughness length for momentum - value from tall forest ChatGPT
-z_0b = FT(0.1) # Roughness length for scalars - value from tall forest ChatGPT
-h_c = FT(20.0) # canopy height in m
-h_sfc = FT(20.0) # sfc, for now, top of canopy, 20 m
-h_int = FT(30.0) # int, for now, where measurements would be taken at a typical flux tower of a 20m canopy, 30m 
+LAI = FT(8.0) # m2 [leaf] m-2 [ground]
+z_0m = FT(2.0) # m, Roughness length for momentum - value from tall forest ChatGPT
+z_0b = FT(0.1) # m, Roughness length for scalars - value from tall forest ChatGPT
+h_c = FT(20.0) # m, canopy height
+h_sfc = FT(20.0) # m, canopy height 
+h_int = FT(30.0) # m, "where measurements would be taken at a typical flux tower of a 20m canopy"
 shared_params = SharedCanopyParameters{FT, typeof(earth_param_set)}(LAI, h_c, z_0m, z_0b, earth_param_set)
-lat = FT(0.0)
-long = FT(-180)
+lat = FT(0.0) # degree
+long = FT(-180) # degree
 
 function zenith_angle(t::FT; latitude = lat, longitude = long, insol_params = earth_param_set.insol_params) where {FT}    
     return FT(instantaneous_zenith_angle(DateTime(t), longitude, latitude, insol_params)[1])
@@ -48,15 +48,15 @@ end
 
 u_atmos = t -> eltype(t)(3)
 
-liquid_precip = (t) -> eltype(t)(0)
-snow_precip = (t) -> eltype(t)(0)
-T_atmos = t -> eltype(t)(290)
+liquid_precip = (t) -> eltype(t)(0) # m
+snow_precip = (t) -> eltype(t)(0) # m
+T_atmos = t -> eltype(t)(290) # Kelvin
 q_atmos = t -> eltype(t)(0.001) # kg/kg
 P_atmos = t -> eltype(t)(1e5) # Pa
-h_atmos = h_int
+h_atmos = h_int # m
 c_atmos = (t) -> eltype(t)(4.11e-4) # mol/mol
 atmos = PrescribedAtmosphere(
-            liquid_precip,
+            liquid_precip, 
             snow_precip,
             T_atmos,
             u_atmos,
@@ -150,6 +150,16 @@ Y.canopy.hydraulics[1] = plant_ν
 update_aux! = make_update_aux(canopy)
 t0 = FT(0.0)
 update_aux!(p,Y,t0)
+
+
+# Check values:
+# If we write a unit test for this, should we give a range?
+parent(p.canopy.photosynthesis.An) * 1e6 # should be around 10 (umol CO2 m-2 s-1)
+parent(p.canopy.photosynthesis.GPP) * 1e6
+
+
+
+
 
 # 1. How to update the auxiliary variables for photosynthesis, RT, stomatal conductance (src) [X]
 # 2. Ingest the drivers (atmospheric and radiation) (src) [X]
