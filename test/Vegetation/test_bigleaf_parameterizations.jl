@@ -12,6 +12,14 @@ import ClimaLSM.Parameters as LSMP
 include(joinpath(pkgdir(ClimaLSM), "parameters", "create_parameters.jl"))
 FT = Float32
 earth_param_set = create_lsm_parameters(FT)
+
+# To check units faster, and avoid conversion error 
+using Unitful: L, mol, K, °C, m, kg, s, μmol
+using UnitfulMoles: molC, molH, molO
+using Unitful, UnitfulMoles
+@compound CO₂
+@compound H₂O
+
 @testset "Big Leaf Parameterizations" begin
     # Test with defaults
     RTparams = BeerLambertParameters{FT}()
@@ -35,12 +43,12 @@ earth_param_set = create_lsm_parameters(FT)
     θs = FT.(Array(0:0.1:(π / 2)))
     SW(θs) = cos.(θs) * FT.(500) # W/m^2
     PAR = SW(θs) ./ (energy_per_photon * N_a) # convert 500 W/m^2 to mol of photons per m^2/s
-    K = extinction_coeff.(RTparams.ld, θs)
-    @test all(K .≈ RTparams.ld ./ cos.(θs))
-    APAR = plant_absorbed_ppfd.(PAR, RTparams.ρ_leaf, K, LAI, RTparams.Ω)
+    K_c = extinction_coeff.(RTparams.ld, θs)
+    @test all(K_c .≈ RTparams.ld ./ cos.(θs))
+    APAR = plant_absorbed_ppfd.(PAR, RTparams.ρ_leaf, K_c, LAI, RTparams.Ω)
     @test all(
         APAR .≈
-        PAR .* (1 - RTparams.ρ_leaf) .* (1 .- exp.(-K .* LAI .* RTparams.Ω)),
+        PAR .* (1 - RTparams.ρ_leaf) .* (1 .- exp.(-K_c .* LAI .* RTparams.Ω)),
     )
     To = photosynthesisparams.To
     Vcmax =
@@ -65,12 +73,12 @@ earth_param_set = create_lsm_parameters(FT)
     @test photosynthesisparams.Vcmax25 *
           arrhenius_function(T, To, R, photosynthesisparams.ΔHVcmax) ≈ Vcmax
 
-    m = medlyn_term(stomatal_g_params.g1, VPD)
+    m_t = medlyn_term(stomatal_g_params.g1, VPD)
 
-    @test m == 1 + stomatal_g_params.g1 / sqrt(VPD)
-    ci = intercellular_co2(ca, Γstar, m)
-    @test ci == ca * (1 - 1 / m)
-    @test intercellular_co2(ca, FT(1), m) == FT(1)
+    @test m_t == 1 + stomatal_g_params.g1 / sqrt(VPD)
+    ci = intercellular_co2(ca, Γstar, m_t)
+    @test ci == ca * (1 - 1 / m_t)
+    @test intercellular_co2(ca, FT(1), m_t) == FT(1)
 
     Ac = rubisco_assimilation(
         photosynthesisparams.mechanism,
@@ -146,16 +154,29 @@ earth_param_set = create_lsm_parameters(FT)
         medlyn_conductance.(
             stomatal_g_params.g0,
             stomatal_g_params.Drel,
-            m,
+            m_t,
             An,
             ca,
         )
     @test all(
         @.(
             stomatal_conductance ≈
-            stomatal_g_params.g0 + stomatal_g_params.Drel * m * (An / ca)
+            stomatal_g_params.g0 + stomatal_g_params.Drel * m_t * (An / ca)
         )
     )
-    GPP = compute_GPP.(An, K, LAI, RTparams.Ω) # mol m-2 s-1
-    @test all(@.(GPP ≈ An * (1 - exp(-K * LAI * RTparams.Ω)) / K))
+    GPP = compute_GPP.(An, K_c, LAI, RTparams.Ω) # mol m-2 s-1
+    @test all(@.(GPP ≈ An * (1 - exp(-K_c * LAI * RTparams.Ω)) / K_c))
+
+    # Check if values seems reasonable in commonly used units
+    GPP_si = [GPP]molCO₂*m^-2*s^-1; GPP_si = GPP_si[1] # GPP si units
+    GPP_uu = GPP_si .|> μmolCO₂*m^-2*s^-1 # GPP usual units
+
+    An_si = [An]molCO₂*m^-2*s^-1; An_si = An_si[1] # not sure how to get the [1] directly
+    An_uu = An_si .|> μmolCO₂*m^-2*s^-1
+
+    Rd_si = [Rd]molCO₂*m^-2*s^-1; Rd_si = Rd_si[1]
+    Rd_uu = Rd_si .|> μmolCO₂*m^-2*s^-1
+
+    stomatal_conductance_si = [stomatal_conductance]molH₂O*m^-2*s^-1; stomatal_conductance_si = stomatal_conductance_si[1] # already si
+    
 end # testset
