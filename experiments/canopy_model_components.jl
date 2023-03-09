@@ -46,7 +46,7 @@ function longwave_radiation(t::FT) where {FT}
     return FT(200) # W/m^2
 end
 
-u_atmos = t -> eltype(t)(10) #m.s-1
+u_atmos = t -> eltype(t)(10) # m s-1
 
 liquid_precip = (t) -> eltype(t)(0) # m
 snow_precip = (t) -> eltype(t)(0) # m
@@ -156,12 +156,20 @@ parent(p.canopy.photosynthesis.GPP) * 1e6 # [expected value], (units)
 parent(p.canopy.hydraulics.ψ)
 parent(p.canopy.hydraulics.fa)
 parent(p.canopy.conductance.medlyn_term)
-parent(p.canopy.conductance.gs)
+gs_mol = parent(p.canopy.conductance.gs) # mol m-2 s-1
+
+Rgas = 8.314 # (J mol-1 K-1)
+Tair = T_atmos(t0) # K
+pressure = P_atmos(t0) # Pa
+
+gs_ms = gs_mol * (Rgas * Tair) / pressure # NOTE we should convert to m s-1 in canopy_parameterizations if thats the units we want
+
+parent(p.canopy.conductance.gs) * 0.0231 # [expected around 2] - (m s-1)
 parent(p.canopy.radiative_transfer.apar) * 1e6
 
 (evapotranspiration, shf, lhf) = canopy_surface_fluxes(canopy.atmos, canopy, Y, p, t0)
 
-parent(evapotranspiration) * 1000 * 3600 * 24 # [] - (mm d-1) 
+parent(evapotranspiration) * 1000 * 3600 # [should be around 1] - (mm hr-1) 
 shf # note shf is a different type (not Float64-valued Field, but Float64) 
 parent(lhf) 
 

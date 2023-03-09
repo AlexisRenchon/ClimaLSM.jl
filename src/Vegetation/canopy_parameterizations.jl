@@ -321,8 +321,9 @@ end
 """
 
 """
-function upscale_leaf_conductance(gs::FT, LAI::FT) where {FT}
+function upscale_leaf_conductance(gs::FT, LAI::FT, T::FT, R::FT, P::FT) where {FT}
     canopy_conductance = gs * LAI
+    canopy_conductance = canopy_conductance * (R * T) / P # convert to m s-1
     return canopy_conductance
 end
 

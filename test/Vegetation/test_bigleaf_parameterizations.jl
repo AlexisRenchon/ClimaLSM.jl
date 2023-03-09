@@ -36,7 +36,7 @@ using Unitful, UnitfulMoles
 
     # Drivers
     T = FT(290) # K 
-    VPD = FT(6e3) # Pa
+    VPD = FT(2e3) # Pa
     ψ_l = FT(-2e6) # Pa
     ca = FT(4.11e-4) # mol/mol
     R = FT(LSMP.gas_constant(earth_param_set))

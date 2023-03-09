@@ -253,8 +253,8 @@ function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
     ρ_m = FT(LSMP.ρ_cloud_liq(earth_param_set) / LSMP.molar_mass_water(earth_param_set))
 
     leaf_conductance = p.canopy.conductance.gs
-    canopy_conductance = upscale_leaf_conductance.(leaf_conductance, model.parameters.LAI)
-    r_sfc = @. 1/(canopy_conductance/ρ_m) # should be s/m
+    canopy_conductance = upscale_leaf_conductance.(leaf_conductance, model.parameters.LAI, T, R, P) # need to get T, R, P
+    r_sfc = @. 1/(canopy_conductance) # should be s/m
     r_eff = r_ae .+ r_sfc
     canopy_transpiration = @. base_transpiration*r_ae/r_eff
 
