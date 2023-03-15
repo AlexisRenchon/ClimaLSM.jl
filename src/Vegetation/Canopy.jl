@@ -247,7 +247,14 @@ function canopy_surface_fluxes(atmos::PrescribedAtmosphere{FT},
     # T = g_eff (q_sat(T_sfc) - q_atmos)  < E_potential
 
     base_lhf, shf, base_transpiration, C_h = surface_fluxes(atmos, model, Y, p, t) #Per unit m^2 of leaf
+
     earth_param_set = model.parameters.earth_param_set
+    R = FT(LSMP.gas_constant(earth_param_set))
+    P::FT = model.atmos.P(t)
+    T::FT = model.atmos.T(t)
+
+
+
     # here is where we adjust evaporation for stomatal conductance = 1/r_sfc
     r_ae = 1/(C_h * abs(atmos.u(t))) # s/m
     ρ_m = FT(LSMP.ρ_cloud_liq(earth_param_set) / LSMP.molar_mass_water(earth_param_set))
