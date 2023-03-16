@@ -498,4 +498,37 @@ function bulk_LW_emissivity(
     ε_LW = (1.0 - fveg) * ε_soil + fveg * ε_p         # Land surface longwave emissivity
     return ϵ_LW  
 end
- 
+
+"""
+    penman_monteith(
+        Δ::FT, # Rate of change of saturation specific humidity with air temperature. (Pa K−1)  
+        Rn::FT, # Net irradiance (W m−2), the external source of energy flux
+        G::FT, # Ground heat flux (W m−2)
+        ρa::FT, # Dry air density (kg m−3)
+        cp::FT, # Specific heat capacity of air (J kg−1 K−1) 
+        VPD::FT, # vapor pressure deficit (Pa)
+        Ga::FT, # Conductivity of air, atmospheric conductance (m s−1)
+        γ::FT, # Psychrometric constant (γ ≈ 66 Pa K−1)
+        gs::FT, # Conductivity of stoma, surface or stomatal conductance (m s−1)
+        Lv::FT, # Volumetric latent heat of vaporization. Energy required per water volume vaporized. (Lv = 2453 MJ m−3)
+        ) where {FT}
+
+Computes evapotranspiration (or transpiration, depending if gs is stomatal or surface conductance) 
+(I think ET is in m s-1?)
+using Penman-Monteith equation.        
+"""
+function penman_monteith(
+    Δ::FT, # Rate of change of saturation specific humidity with air temperature. (Pa K−1)  
+    Rn::FT, # Net irradiance (W m−2), the external source of energy flux
+    G::FT, # Ground heat flux (W m−2)
+    ρa::FT, # Dry air density (kg m−3)
+    cp::FT, # Specific heat capacity of air (J kg−1 K−1) 
+    VPD::FT, # vapor pressure deficit (Pa)
+    ga::FT, # Conductivity of air, atmospheric conductance (m s−1)
+    γ::FT, # Psychrometric constant (γ ≈ 66 Pa K−1)
+    gs::FT, # Conductivity of stoma, surface or stomatal conductance (m s−1)
+    Lv::FT, # Volumetric latent heat of vaporization. Energy required per water volume vaporized. (Lv = 2453 MJ m−3)
+    ) where {FT}
+    ET = (Δ * (Rn - G) + ρa * cp * VPD * ga) / ((Δ + γ * (1 + ga/gs)) * Lv)
+    return ET
+end
