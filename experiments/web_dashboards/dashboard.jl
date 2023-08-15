@@ -20,6 +20,7 @@ function ClimaLSM_dashboard(button, g1_input)
     
   on(button) do click
     g1[] = g1_input.value[]
+    sv[] = 
     # probably need to work with g1 as an observable
     GPP[] = [parent(sv.saveval[k].canopy.photosynthesis.GPP)[1] for k in 1:length(sv.saveval)]   
     autolimits!(ax)

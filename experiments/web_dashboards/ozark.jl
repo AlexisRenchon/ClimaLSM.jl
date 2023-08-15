@@ -1,5 +1,3 @@
-function ClimaLSM_ozark(g1)
-
 using DiffEqCallbacks
 import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
@@ -16,10 +14,14 @@ using ClimaLSM.Canopy
 using ClimaLSM.Canopy.PlantHydraulics
 import ClimaLSM
 import ClimaLSM.Parameters as LSMP
-include(joinpath(pkgdir(ClimaLSM), "parameters", "create_parameters.jl"))
+
 const FT = Float64
+
+include(joinpath(pkgdir(ClimaLSM), "parameters", "create_parameters.jl"))
 earth_param_set = create_lsm_parameters(FT)
 climalsm_dir = pkgdir(ClimaLSM)
+
+function ClimaLSM_ozark(g1)
 
 # This reads in the data from the flux tower site and creates
 # the atmospheric and radiative driver structs for the model
