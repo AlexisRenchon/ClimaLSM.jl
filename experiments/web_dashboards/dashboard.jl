@@ -11,9 +11,10 @@ function init() # not sure why needed to rerun each time before using ClimaLSM_o
 end
 init();
 
-fig = Figure(); display(fig) # should be in ClimaLSM_dashboard, but bug for some reason
+# fig = Figure(); display(fig) # should be in ClimaLSM_dashboard, but bug for some reason
 
 function ClimaLSM_dashboard(button, g1_input)
+  fig = Figure()
   ax = Axis(fig[1,1], xlabel = "day", ylabel = "GPP")
   daily = collect(range(120, 140, 481)) # could be output from ClimaLSM_ozark()
   GPP = Observable(ones(481))
