@@ -8,7 +8,7 @@ include("ozark_domain.jl");
 include("ozark_parameters.jl");
 include("ozark_simulation.jl");
 
-sv, cb, prob, sol = ClimaLSM_ozark(120.0) # test - works but can't access sv.saveval
+GPP = ClimaLSM_ozark(120.0) # test - works
 
 fig = Figure(); display(fig)
 
@@ -19,14 +19,15 @@ function ClimaLSM_dashboard(button, g1_input)
   pdata = @lift(Vec2f.(daily, $GPP))
   plt = lines!(ax, pdata)
 
-  g1 = g1_input.value
-  sv = @lift(ClimaLSM_ozark($g1))
+  g1 = g1_input.value  
+  GPP = @lift(ClimaLSM_ozark($g1))
     
   on(button) do click
     g1[] = g1_input.value[]
-    sv[] = 
+    # sv[] = 
     # probably need to work with g1 as an observable
-    GPP[] = [parent(sv.saveval[k].canopy.photosynthesis.GPP)[1] for k in 1:length(sv.saveval)]   
+    # GPP[] = [parent(sv.saveval[k].canopy.photosynthesis.GPP)[1] for k in 1:length(sv.saveval)]   
+    GPP[] = ClimaLSM_ozark(g1)
     autolimits!(ax)
   end
 

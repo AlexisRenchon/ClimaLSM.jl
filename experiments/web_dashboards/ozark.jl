@@ -228,5 +228,8 @@ sol = ODE.solve(
     saveat = saveat,
 )
 
-return sv, cb, prob, sol
+#daily = sol.t ./ 3600 ./ 24
+modeled_GPP = [parent(sv.saveval[k].canopy.photosynthesis.GPP)[1] for k in 1:length(sv.saveval)]
+
+return modeled_GPP
 end
