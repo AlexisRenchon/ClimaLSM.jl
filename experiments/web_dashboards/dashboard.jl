@@ -2,9 +2,13 @@ using JSServe
 import JSServe.TailwindDashboard as D
 using WGLMakie
 
-include("ozark.jl") 
+include("ozark.jl")
+include("ozark_met_drivers_FLUXNET.jl");
+include("ozark_domain.jl");
+include("ozark_parameters.jl");
+include("ozark_simulation.jl");
 
-sv = ClimaLSM_ozark(120.0) # test
+sv, cb, prob, sol = ClimaLSM_ozark(120.0) # test - works but can't access sv.saveval
 
 fig = Figure(); display(fig)
 

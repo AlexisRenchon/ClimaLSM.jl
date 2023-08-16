@@ -23,6 +23,7 @@ climalsm_dir = pkgdir(ClimaLSM)
 
 function ClimaLSM_ozark(g1)
 
+#=
 # This reads in the data from the flux tower site and creates
 # the atmospheric and radiative driver structs for the model
 include(
@@ -38,7 +39,7 @@ include(
 include(
     joinpath(climalsm_dir, "experiments/web_dashboards/ozark_simulation.jl"),
 )
-
+=#
 
 # Now we set up the model. For the soil model, we pick
 # a model type and model args:
@@ -227,6 +228,5 @@ sol = ODE.solve(
     saveat = saveat,
 )
 
-
-return sv, sol, cb
+return sv, cb, prob, sol
 end
