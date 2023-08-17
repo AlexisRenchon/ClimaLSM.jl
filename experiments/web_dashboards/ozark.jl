@@ -236,11 +236,12 @@ T_model = [parent(sv.saveval[k].canopy.conductance.transpiration)[1] for k in 1:
 E_model = [parent(sv.saveval[k].soil_evap)[1] for k in 1:length(sol.t)] .* (1e3 * 24 * 3600)
 ET_model = E_model .+ T_model
 H_model = [parent(sv.saveval[k].soil_shf)[1] for k in 1:length(sol.t)] # sensible heat flux?
+L_model = [parent(sv.saveval[k].soil_lhf)[1] for k in 1:length(sol.t)] # latent heat flux?
 soil_T_sfc_model = [parent(sv.saveval[k].soil.T)[end] for k in 1:length(sol.t)]
 soil_T_5_model = [parent(sv.saveval[k].soil.T)[end - 1] for k in 1:length(sol.t)]
 
 
 ET_measured = LE ./ (LSMP.LH_v0(earth_param_set) * 1000) .* (1e3 * 24 * 3600)
 
-return (GPP_model = GPP_model, T_model = T_model, E_model = E_model, ET_model = ET_model, H_model = H_model, soil_T_5_model = soil_T_5_model, soil_T_sfc_model = soil_T_sfc_model, ET_measured = ET_measured)
+return (GPP_model = GPP_model, T_model = T_model, E_model = E_model, ET_model = ET_model, H_model = H_model, L_model = L_model, soil_T_5_model = soil_T_5_model, soil_T_sfc_model = soil_T_sfc_model, ET_measured = ET_measured)
 end
