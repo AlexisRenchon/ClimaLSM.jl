@@ -24,10 +24,12 @@ function ClimaLSM_dashboard(button, g1_input)
   linkxaxes!(ax, ax2)
 
   # Create model Observables
-  daily = collect(range(120, 140, 481)) # could be output from ClimaLSM_ozark()
-  GPP_model = Observable(ones(481))
-  H_model = Observable(ones(481))
-  L_model = Observable(ones(481))
+  day_ini = 1
+  n = N_days*24+1
+  daily = collect(range(1, N_days + day_ini, n)) # could be output from ClimaLSM_ozark()
+  GPP_model = Observable(ones(n))
+  H_model = Observable(ones(n))
+  L_model = Observable(ones(n))
   
   # Plot model
   pdata_GPP = @lift(Vec2f.(daily, $GPP_model))
@@ -42,8 +44,8 @@ function ClimaLSM_dashboard(button, g1_input)
   g1 = g1_input.value 
 
   # data
-  data_daily = collect(range(120, 120+N_days, N_days*48+1))
-  data_hh = 120*48:120*48+N_days*48 # data is half-hourly, model is hourly?
+  data_daily = collect(range(1, 1+N_days, N_days*48+1))
+  data_hh = 1*48:1*48+N_days*48 # data is half-hourly, model is hourly?
   
   # ax 1
   plt_GPP_obs = lines!(ax, data_daily, GPP[data_hh])
@@ -61,7 +63,7 @@ function ClimaLSM_dashboard(button, g1_input)
   # Action when clicking button "Run ClimaLSM"
   on(button) do click
     g1[] = g1_input.value[]
-    init(); GPP_model[] = @lift(ClimaLSM_ozark($g1)[:GPP_model])[]
+    init(); GPP_model[] = @lift(ClimaLSM_ozark($g1)[:GPP_model])[] # should do these 3 lines in 1, it reruns the model 3 times here...
     init(); H_model[] = @lift(ClimaLSM_ozark($g1)[:H_model])[]
     init(); L_model[] = @lift(ClimaLSM_ozark($g1)[:L_model])[]
     # autolimits!(ax)
@@ -84,6 +86,6 @@ end
 
 
 
-# TO DO: add a card or column right to GPP, put energy flux in it 
-# top row: diurnal
-# bottom row: seasonal
+# TO DO:
+# make sure t0 and tf are good for data and model
+
