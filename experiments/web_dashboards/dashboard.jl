@@ -14,8 +14,9 @@ init();
 # fig = Figure(); display(fig) # should be in ClimaLSM_dashboard, but bug for some reason
 
 function ClimaLSM_dashboard(button, g1_input)
-  fig = Figure()
+  fig = Figure(resolution = (1600, 800))
   ax = Axis(fig[1,1], xlabel = "Day of the year", ylabel = "GPP (μmol m⁻² s⁻¹)")
+  ax2 = Axis(fig[2,1], xlabel = "Day of the year", ylabel = "Energy (W m⁻²)")
   daily = collect(range(120, 140, 481)) # could be output from ClimaLSM_ozark()
   GPP_model = Observable(ones(481))
   pdata = @lift(Vec2f.(daily, $GPP_model))
@@ -34,7 +35,7 @@ function ClimaLSM_dashboard(button, g1_input)
   on(button) do click
     g1[] = g1_input.value[]
     init();
-    GPP_model[] = @lift(ClimaLSM_ozark($g1))[]
+    GPP_model[] = @lift(ClimaLSM_ozark($g1)[:GPP_model])[]
     autolimits!(ax)
   end
 
@@ -47,7 +48,9 @@ App() do
     g1_input = D.NumberInput(141.0)
     fig = ClimaLSM_dashboard(button, g1_input)
     return DOM.div(
-                   D.Card(button), D.Card(D.FlexRow("g1: ", g1_input)), D.Card(fig)
+                   D.Card(button),
+                   D.Card(D.FlexRow("g1: ", g1_input)),
+                   D.Card(fig)
                   )
 end
 
