@@ -229,7 +229,18 @@ sol = ODE.solve(
 )
 
 #daily = sol.t ./ 3600 ./ 24
-modeled_GPP = [parent(sv.saveval[k].canopy.photosynthesis.GPP)[1] for k in 1:length(sv.saveval)]
 
-return modeled_GPP
+# modeled data
+GPP_model = [parent(sv.saveval[k].canopy.photosynthesis.GPP)[1] for k in 1:length(sv.saveval)] .* 1e6
+T_model = [parent(sv.saveval[k].canopy.conductance.transpiration)[1] for k in 1:length(sol.t)] .* (1e3 * 24 * 3600)
+E_model = [parent(sv.saveval[k].soil_evap)[1] for k in 1:length(sol.t)] .* (1e3 * 24 * 3600)
+ET_model = E .+ T
+H_model = [parent(sv.saveval[k].soil_shf)[1] for k in 1:length(sol.t)] # sensible heat flux?
+soil_T_sfc_model = [parent(sv.saveval[k].soil.T)[end] for k in 1:length(sol.t)]
+soil_T_5_model = [parent(sv.saveval[k].soil.T)[end - 1] for k in 1:length(sol.t)]
+
+
+measured_ET = LE ./ (LSMP.LH_v0(earth_param_set) * 1000) .* (1e3 * 24 * 3600)
+
+return GPP_model
 end
