@@ -25,7 +25,9 @@ function ClimaLSM_dashboard(button, g1_input)
 
   # Create model Observables
   daily = collect(range(120, 140, 481)) # could be output from ClimaLSM_ozark()
-  GPP_model = H_model = L_model = Observable(ones(481))
+  GPP_model = Observable(ones(481))
+  H_model = Observable(ones(481))
+  L_model = Observable(ones(481))
   
   # Plot model
   pdata_GPP = @lift(Vec2f.(daily, $GPP_model))
