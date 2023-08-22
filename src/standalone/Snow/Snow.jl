@@ -166,7 +166,7 @@ auxiliary_vars(::SnowModel) = (
 
 
 ClimaLSM.name(::SnowModel) = :snow
-ClimaLSM.domain(::SnowModel) = :surface
+ClimaLSM.domain_name(::SnowModel) = :surface
 
 function ClimaLSM.make_update_aux(model::SnowModel{FT}) where {FT}
     function update_aux!(p, Y, t)

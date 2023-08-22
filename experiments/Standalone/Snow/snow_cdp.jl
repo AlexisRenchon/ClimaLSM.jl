@@ -49,7 +49,7 @@ prob = ODE.ODEProblem(
 saveat = FT.(collect(t0:(24 * 3600):tf))
 sv = (;
     t = Array{FT}(undef, length(saveat)),
-    saveval = Array{ClimaCore.Fields.FieldVector}(undef, length(saveat)),
+    saveval = Array{NamedTuple}(undef, length(saveat)),
 );
 cb = ClimaLSM.NonInterpSavingCallback(sv, saveat);
 
