@@ -131,8 +131,6 @@ atmos_h = FT(2)
 precipitation_function(t) = p_spline(t) < 0.0 ? p_spline(t) : 0.0 # m/s
 snow_precip(t) = 0.0 # Not correct in winter
 
-
-
 # Construct the drivers. For the reference time we will use the UTC time at the
 # start of the simulation
 atmos = ClimaLSM.PrescribedAtmosphere(
