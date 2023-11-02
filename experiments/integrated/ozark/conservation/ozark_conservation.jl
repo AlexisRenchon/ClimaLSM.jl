@@ -264,7 +264,10 @@ savedir = joinpath(climalsm_dir, "experiments/integrated/ozark/conservation")
 ##  Soil water balance ##
 
 # Evaporation
-E = [parent(sv.saveval[k].soil_evap)[1] for k in 2:length(sol.t)]
+E = [
+    parent(sv.saveval[k].soil.sfc_conditions.vapor_flux)[1] for
+    k in 2:length(sol.t)
+]
 # Root sink term: a positive root extraction is a sink term for soil; add minus sign
 root_sink = [sum(-1 .* sv.saveval[k].root_extraction) for k in 2:length(sol.t)]
 # Free Drainage BC, F_bot = -K_bot
@@ -357,15 +360,13 @@ Plots.savefig(joinpath(savedir, "water_conservation.png"))
 # Energy of liquid water infiltrating soil is ignored in our model.
 
 # Turbulent fluxes
-LHF = [parent(sv.saveval[k].soil_lhf)[1] for k in 2:length(sol.t)]
-SHF = [parent(sv.saveval[k].soil_shf)[1] for k in 2:length(sol.t)]
+LHF =
+    [parent(sv.saveval[k].soil.sfc_conditions.lhf)[1] for k in 2:length(sol.t)]
+SHF =
+    [parent(sv.saveval[k].soil.sfc_conditions.shf)[1] for k in 2:length(sol.t)]
 # Radiation is computed in LW and SW components
 # with positive numbers indicating the soil gaining energy.
-soil_Rn =
-    -1 .* [
-        parent(sv.saveval[k].soil_LW_n .+ sv.saveval[k].soil_SW_n)[1] for
-        k in 2:length(sol.t)
-    ]
+soil_Rn = -1 .* [parent(sv.saveval[k].soil.R_n)[1] for k in 2:length(sol.t)]
 # Root sink term: a positive root extraction is a sink term for soil; add minus sign
 root_sink_energy =
     [sum(-1 .* sv.saveval[k].root_energy_extraction) for k in 2:length(sol.t)]
