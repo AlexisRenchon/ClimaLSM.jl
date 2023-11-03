@@ -13,6 +13,13 @@ An abstract type for soil-specific types of boundary conditions, like free drain
 """
 abstract type AbstractSoilBC <: ClimaLSM.AbstractBC end
 
+
+boundary_aux_vars(::AbstractSoilBC) = ()
+
+boundary_aux_var_domain_names(::AbstractSoilBC) = ()
+
+boundary_aux_var_types(::AbstractSoilBC) = ()
+
 """
    MoistureStateBC <: AbstractSoilBC
 
@@ -127,6 +134,20 @@ function AtmosDrivenFluxBC(atmos, radiation; runoff = NoRunoff())
     return AtmosDrivenFluxBC{typeof.(args)...}(args...)
 end
 
+
+boundary_vars(::AtmosDrivenFluxBC) = (:sfc_conditions, :R_n)
+
+boundary_var_domain_names(::AtmosDrivenFluxBC) = (:surface, :surface)
+
+boundary_var_types(
+    ::AtmosDrivenFluxBC{
+        <:AbstractAtmosphericDrivers{FT},
+        <:AbstractRadiativeDrivers{FT},
+        <:AbstractRunoffModel,
+    },
+) where {FT} = (NamedTuple{(:lhf, :shf, :vapor_flux, :r_ae), NTuple{4, FT}}, FT)
+
+
 """
     soil_boundary_fluxes(
         bc::AtmosDrivenFluxBC{
@@ -169,19 +190,20 @@ function soil_boundary_fluxes(
     t,
 ) where {FT}
 
-    conditions = surface_fluxes(bc.atmos, model, Y, p, t)
-    R_n = net_radiation(bc.radiation, model, Y, p, t)
+    p.soil.sfc_conditions .= surface_fluxes(bc.atmos, model, Y, p, t)
+    p.soil.R_n .= net_radiation(bc.radiation, model, Y, p, t)
     # We are ignoring sublimation for now
     precip = bc.atmos.liquid_precip(t)
     infiltration = soil_surface_infiltration(
         bc.runoff,
-        precip .+ conditions.vapor_flux,
+        precip .+ p.soil.sfc_conditions.vapor_flux,
         Y,
         p,
         model.parameters,
     )
     # We do not model the energy flux from infiltration
-    net_energy_flux = @. R_n + conditions.lhf + conditions.shf
+    net_energy_flux =
+        @. p.soil.R_n + p.soil.sfc_conditions.lhf + p.soil.sfc_conditions.shf
     return infiltration, net_energy_flux
 
 end
