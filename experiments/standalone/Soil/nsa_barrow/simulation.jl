@@ -1,6 +1,6 @@
-t0 = FT(180 * 3600 * 24)
-N_days_spinup = 60
-N_days = N_days_spinup + 30
+t0 = FT(170 * 3600 * 24)
+N_days_spinup = 45
+N_days = N_days_spinup + 45
 dt = FT(60)
 tf = t0 + FT(3600 * 24 * N_days)
 # Number of timesteps between saving output

@@ -29,11 +29,13 @@ function replace_missing_with_zero_by_value!(field)
 end
 
 # Use ARM data when possible
-arm_data = NCDataset("/Users/katherinedeck/Desktop/nsaarmbeatmC1.c1.20130101.003000.custom.nc")
+arm_data = NCDataset(
+    "/Users/katherinedeck/Desktop/nsaarmbeatmC1.c1.20130101.003000.custom.nc",
+)
 WS = @. sqrt(arm_data["u_wind_sfc"][:]^2 + arm_data["v_wind_sfc"][:]^2)
 # wind speed is at 10m, other measurements at 2m
 # linearly interpolate to ground at zero speed
-WS_2m = (2/10) .*WS
+WS_2m = (2 / 10) .* WS
 WS_2m[typeof.(WS_2m) .== Missing] .= mean(WS_2m[.~(typeof.(WS_2m) .== Missing)])
 
 arm_LOCAL_DATETIME = arm_data["time"][:]
@@ -41,7 +43,7 @@ arm_UTC_DATETIME = arm_LOCAL_DATETIME .+ Dates.Hour(8)
 TA = arm_data["temperature_sfc"][:]
 TA[typeof.(TA) .== Missing] .= mean(TA[.~(typeof.(TA) .== Missing)])
 P = arm_data["precip_rate_sfc"][:] ./ (1000 * 3600) # convert mm/hr to m/s
-P[typeof.(P) .== Missing] .= 0f0
+P[typeof.(P) .== Missing] .= 0.0f0
 PA = arm_data["pressure_sfc"][:] .* 100
 PA[typeof.(PA) .== Missing] .= mean(PA[.~(typeof.(PA) .== Missing)])
 RH = arm_data["relative_humidity_sfc"][:]
@@ -59,7 +61,7 @@ arm_DATA_DT = 3600
 
 
 #Make a bunch of splines
-arm_seconds = FT.(1800:arm_DATA_DT:length(arm_UTC_DATETIME)* arm_DATA_DT);
+arm_seconds = FT.(1800:arm_DATA_DT:(length(arm_UTC_DATETIME) * arm_DATA_DT));
 p_spline = Spline1D(arm_seconds, -P[:]) # m/s
 atmos_q = Spline1D(arm_seconds, q[:])
 atmos_T = Spline1D(arm_seconds, TA[:])
@@ -90,18 +92,18 @@ CO2 .= CO2 .* 1e-6 # μmol to mol
 LW_IN = driver_data[2:end, column_names .== "LW_IN"][subset]
 replace_missing_with_mean_by_value!(LW_IN)
 SW_IN = driver_data[2:end, column_names .== "SW_IN"][subset]
-replace_missing_with_mean_by_value!(SW_IN)
+replace_missing_with_zero_by_value!(SW_IN)
 
 
 SWC_1 = driver_data[2:end, column_names .== "SWC_PI_1_1_A"][subset]
-SWC_2 = driver_data[2:end, column_names .==  "SWC_PI_1_2_A"][subset]
+SWC_2 = driver_data[2:end, column_names .== "SWC_PI_1_2_A"][subset]
 replace_missing_with_zero_by_value!(SWC_1)
 replace_missing_with_zero_by_value!(SWC_2)
 SWC_1 .= SWC_1 ./ 100
-SWC_2 .=SWC_2 ./ 100
+SWC_2 .= SWC_2 ./ 100
 
-TS_1 = driver_data[2:end, column_names .==  "TS_PI_1_1_A"][subset]
-TS_2 = driver_data[2:end, column_names .==  "TS_PI_2_2_A"][subset]
+TS_1 = driver_data[2:end, column_names .== "TS_PI_1_1_A"][subset]
+TS_2 = driver_data[2:end, column_names .== "TS_PI_2_2_A"][subset]
 TS_3 = driver_data[2:end, column_names .== "TS_PI_2_3_A"][subset]
 replace_missing_with_zero_by_value!(TS_1)
 replace_missing_with_zero_by_value!(TS_2)
@@ -113,7 +115,7 @@ TS_3 .= TS_3 .+ 273.15;# convert C to K
 
 LE = driver_data[2:end, column_names .== "LE"][subset]
 H = driver_data[2:end, column_names .== "H"][subset]
-G = driver_data[2:end, column_names .==  "G_PI_1_1_A"][subset]
+G = driver_data[2:end, column_names .== "G_PI_1_1_A"][subset]
 replace_missing_with_zero_by_value!(LE)
 replace_missing_with_zero_by_value!(H)
 replace_missing_with_zero_by_value!(G)

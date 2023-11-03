@@ -26,10 +26,7 @@ include(
     ),
 )
 include(
-    joinpath(
-        climalsm_dir,
-        "experiments/standalone/Soil/nsa_barrow/domain.jl",
-    ),
+    joinpath(climalsm_dir, "experiments/standalone/Soil/nsa_barrow/domain.jl"),
 )
 include(
     joinpath(
@@ -65,18 +62,12 @@ params = Soil.EnergyHydrologyParameters{FT}(;
     PAR_albedo = soil_α_PAR,
     NIR_albedo = soil_α_NIR,
 );
-Δz = minimum(
-    ClimaCore.Fields.Δz_field(
-            ClimaLSM.coordinates(domain).subsurface,
-    ),
-)
-sources = ( Soil.PhaseChange{FT}(Δz),)
+Δz = minimum(ClimaCore.Fields.Δz_field(ClimaLSM.coordinates(domain).subsurface))
+sources = (Soil.PhaseChange{FT}(Δz),)
 top_bc = ClimaLSM.Soil.AtmosDrivenFluxBC(atmos, radiation)
 zero_flux = FluxBC((p, t) -> 0.0)
-boundary_conditions = (;
-                       top = top_bc,
-                       bottom = (water = Soil.FreeDrainage(), heat = zero_flux),
-                       )
+boundary_conditions =
+    (; top = top_bc, bottom = (water = Soil.FreeDrainage(), heat = zero_flux))
 soil = Soil.EnergyHydrology{FT}(;
     parameters = params,
     domain = domain,
@@ -92,15 +83,9 @@ Y.soil.ϑ_l = SWC_1[1 + Int(round(t0 / DATA_DT))] # Get soil water content at t0
 # or 2005-01-01-06 (UTC)
 Y.soil.θ_i = FT(0.0)
 T_0 = TS_1[1 + Int(round(t0 / DATA_DT))] # Get soil temperature at t0
-ρc_s =
-    volumetric_heat_capacity.(Y.soil.ϑ_l, Y.soil.θ_i, Ref(soil.parameters))
+ρc_s = volumetric_heat_capacity.(Y.soil.ϑ_l, Y.soil.θ_i, Ref(soil.parameters))
 Y.soil.ρe_int =
-    volumetric_internal_energy.(
-        Y.soil.θ_i,
-        ρc_s,
-        T_0,
-        Ref(soil.parameters),
-    )
+    volumetric_internal_energy.(Y.soil.θ_i, ρc_s, T_0, Ref(soil.parameters))
 set_initial_aux_state! = make_set_initial_aux_state(soil)
 set_initial_aux_state!(p, Y, t0);
 
@@ -207,3 +192,21 @@ Plots.plot!(
 Plots.plot!(plt3, seconds ./ 3600 ./ 24, TS_1, label = "Data, 1")
 Plots.plot!(plt3, seconds ./ 3600 ./ 24, TS_2, label = "Data, 2")
 Plots.plot!(plt3, seconds ./ 3600 ./ 24, TS_3, label = "Data, 3")
+
+
+# LHF
+lhf =
+    [parent(sv.saveval[k].soil.sfc_conditions.lhf)[1] for k in 1:length(sol.t)]
+Plots.plot(daily, lhf, label = "Model", xlim = extrema(daily))
+Plots.plot!(seconds ./ 3600 ./ 24, LE, label = "Data")
+
+# SHF
+shf =
+    [parent(sv.saveval[k].soil.sfc_conditions.shf)[1] for k in 1:length(sol.t)]
+Plots.plot(daily, shf, label = "Model", xlim = extrema(daily))
+Plots.plot!(seconds ./ 3600 ./ 24, H, label = "Data")
+
+soil_Rn = [parent(sv.saveval[k].soil.R_n)[1] for k in 1:length(sol.t)]
+soil_Rn_data = @. (SW_IN - SW_OUT + LW_IN - LW_OUT)
+Plots.plot(daily, -soil_Rn, label = "Model", xlim = extrema(daily))
+Plots.plot!(seconds ./ 3600 ./ 24, soil_Rn_data, label = "Data")
