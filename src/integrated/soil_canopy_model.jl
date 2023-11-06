@@ -553,6 +553,7 @@ struct RootExtraction{FT} <: Soil.AbstractSoilSource{FT} end
                      src::RootExtraction,
                      Y::ClimaCore.Fields.FieldVector,
                      p::NamedTuple
+                     t,
                      model::EnergyHydrology)
 
 An extension of the `ClimaLSM.source!` function,
@@ -565,6 +566,7 @@ function ClimaLSM.source!(
     src::RootExtraction,
     Y::ClimaCore.Fields.FieldVector,
     p::NamedTuple,
+    t,
     model::EnergyHydrology,
 )
     @. dY.soil.ϑ_l += -1 * p.root_extraction
