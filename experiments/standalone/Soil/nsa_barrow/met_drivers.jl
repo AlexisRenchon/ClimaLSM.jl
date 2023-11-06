@@ -30,7 +30,7 @@ end
 
 # Use ARM data when possible
 arm_data = NCDataset(
-    "/Users/katherinedeck/Desktop/nsaarmbeatmC1.c1.20130101.003000.custom.nc",
+    "/Users/katherinedeck/Desktop/Barrow/nsaarmbeatmC1.c1.20130101.003000.custom.nc",
 )
 WS = @. sqrt(arm_data["u_wind_sfc"][:]^2 + arm_data["v_wind_sfc"][:]^2)
 # wind speed is at 10m, other measurements at 2m
@@ -73,7 +73,7 @@ snow_precip(t) = eltype(t)(0) # this is likely not correct
 
 
 # Get other data from Fluxnet
-dataset_path = "/Users/katherinedeck/Downloads/AMF_US-A10_BASE-BADM_4-5"
+dataset_path = "/Users/katherinedeck/Desktop/Barrow/AMF_US-A10_BASE-BADM_4-5"
 data = joinpath(dataset_path, "AMF_US-A10_BASE_HH_4-5.csv");
 driver_data = readdlm(data, ',')
 column_names = driver_data[3, :]
@@ -147,8 +147,8 @@ atmos = ClimaLSM.PrescribedAtmosphere(
     c_co2 = atmos_co2,
 )
 
-lat = FT(38.4133) # degree
-long = FT(-120.9508) # degree
+lat = FT(72.32193) # degree
+long = FT(-156.608) # degree
 
 function zenith_angle(
     t,

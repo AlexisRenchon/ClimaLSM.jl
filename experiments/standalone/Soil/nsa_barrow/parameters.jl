@@ -16,9 +16,9 @@ soil_vg_α = FT(2.0) # inverse meters
 θ_r = FT(0.067) # m3/m3, 
 
 # Soil heat transfer parameters; not needed for hydrology only test
-ν_ss_quartz = FT(0.38)
+ν_ss_quartz = FT(0.2)
 ν_ss_om = FT(0.0)
-ν_ss_gravel = FT(0.1);
+ν_ss_gravel = FT(0.4);
 κ_quartz = FT(7.7) # W/m/K
 κ_minerals = FT(2.5) # W/m/K
 κ_om = FT(0.25) # W/m/K

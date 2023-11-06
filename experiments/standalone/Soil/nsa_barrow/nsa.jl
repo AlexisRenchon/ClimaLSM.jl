@@ -82,7 +82,7 @@ Y.soil.ϑ_l = SWC_1[1 + Int(round(t0 / DATA_DT))] # Get soil water content at t0
 # Both data and simulation are reference to 2005-01-01-00 (LOCAL)
 # or 2005-01-01-06 (UTC)
 Y.soil.θ_i = FT(0.0)
-T_0 = TS_1[1 + Int(round(t0 / DATA_DT))] # Get soil temperature at t0
+T_0 = TS_3[1 + Int(round(t0 / DATA_DT))] # Get soil temperature at t0
 ρc_s = volumetric_heat_capacity.(Y.soil.ϑ_l, Y.soil.θ_i, Ref(soil.parameters))
 Y.soil.ρe_int =
     volumetric_internal_energy.(Y.soil.θ_i, ρc_s, T_0, Ref(soil.parameters))
@@ -146,8 +146,8 @@ Plots.plot!(
     label = "56m",
 )
 
-Plots.plot!(plt1, seconds ./ 3600 ./ 24, SWC_1, label = "Data, 5cm")
-Plots.plot!(plt1, seconds ./ 3600 ./ 24, SWC_2, label = "Data, 20cm")
+Plots.plot!(plt1, seconds ./ 3600 ./ 24, SWC_1, label = "Data, ?cm")
+Plots.plot!(plt1, seconds ./ 3600 ./ 24, SWC_2, label = "Data, ?cm")
 
 plt2 = Plots.plot(
     arm_seconds ./ 3600 ./ 24,
@@ -160,9 +160,9 @@ plt2 = Plots.plot(
     size = (1500, 400),
 )
 Plots.plot(plt2, plt1, layout = grid(2, 1, heights = [0.2, 0.8]))
-#Plots.savefig(joinpath(savedir, "soil_water_content.png"))
+Plots.savefig(joinpath(savedir, "soil_water_content.png"))
 
-
+# Temp
 plt3 = Plots.plot(size = (1500, 800))
 Plots.plot!(
     plt3,
@@ -185,8 +185,15 @@ Plots.plot!(
 Plots.plot!(
     plt3,
     daily,
-    [parent(sv.saveval[k].soil.T)[end - 4] for k in 1:1:length(sol.t)],
-    label = "56m",
+    [parent(sv.saveval[k].soil.T)[end - 6] for k in 1:1:length(sol.t)],
+    label = "1m",
+)
+
+Plots.plot!(
+    plt3,
+    daily,
+    [parent(sv.saveval[k].soil.T)[end - 11] for k in 1:1:length(sol.t)],
+    label = "3.3m",
 )
 
 Plots.plot!(plt3, seconds ./ 3600 ./ 24, TS_1, label = "Data, 1")
