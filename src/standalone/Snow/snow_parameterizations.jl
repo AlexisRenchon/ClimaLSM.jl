@@ -20,7 +20,7 @@ export snow_surface_temperature,
 Returns the surface height of the `Snow` model.
 """
 function ClimaLSM.surface_height(model::SnowModel{FT}, Y, p) where {FT}
-    z_sfc = ClimaCore.Fields.coordinate_field(model.domain.space).z
+    z_sfc = ClimaCore.Fields.coordinate_field(model.domain.space.surface).z
     return z_sfc
 end
 

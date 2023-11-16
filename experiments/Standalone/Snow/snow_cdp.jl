@@ -1,6 +1,5 @@
-import OrdinaryDiffEq as ODE
+import SciMLBase
 import ClimaTimeSteppers as CTS
-using DiffEqCallbacks
 using Plots
 using ClimaCore
 using ClimaLSM.Snow
@@ -40,7 +39,7 @@ exp_tendency! = ClimaLSM.make_exp_tendency(model)
 timestepper = CTS.RK4()
 ode_algo = CTS.ExplicitAlgorithm(timestepper)
 
-prob = ODE.ODEProblem(
+prob = SciMLBase.ODEProblem(
     CTS.ClimaODEFunction(T_exp! = exp_tendency!, dss! = ClimaLSM.dss!),
     Y,
     (t0, tf),
@@ -53,7 +52,7 @@ sv = (;
 );
 cb = ClimaLSM.NonInterpSavingCallback(sv, saveat);
 
-sol = ODE.solve(
+sol = SciMLBase.solve(
     prob,
     ode_algo;
     dt = Δt,

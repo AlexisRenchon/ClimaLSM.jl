@@ -28,7 +28,9 @@ import ClimaLSM:
     auxiliary_vars,
     name,
     prognostic_types,
+    prognostic_domain_names,
     auxiliary_types,
+    auxiliary_domain_names,
     initialize_vars,
     initialize,
     initialize_auxiliary,
@@ -37,6 +39,7 @@ import ClimaLSM:
     surface_air_density,
     surface_specific_humidity,
     surface_evaporative_scaling,
+    surface_height,
     surface_albedo,
     surface_emissivity
 export SnowParameters, SnowModel
@@ -145,8 +148,13 @@ end
 
 prognostic_types(::SnowModel{FT}) where {FT} = (FT, FT)
 prognostic_vars(::SnowModel) = (:S, :U)
+
+prognostic_domain_names(::SnowModel) = (:surface, :surface)
+
 auxiliary_types(::SnowModel{FT}) where {FT} =
     (FT, FT, FT, FT, FT, FT, FT, FT, FT, FT, FT, FT, FT, FT)
+auxiliary_domain_names(::SnowModel) = 
+    (:surface,:surface,:surface,:surface,:surface,:surface,:surface,:surface,:surface,:surface,:surface,:surface,:surface,:surface,)
 auxiliary_vars(::SnowModel) = (
     :q_l,
     :T,
@@ -166,7 +174,6 @@ auxiliary_vars(::SnowModel) = (
 
 
 ClimaLSM.name(::SnowModel) = :snow
-ClimaLSM.domain_name(::SnowModel) = :surface
 
 function ClimaLSM.make_update_aux(model::SnowModel{FT}) where {FT}
     function update_aux!(p, Y, t)
@@ -230,7 +237,7 @@ function ClimaLSM.make_update_aux(model::SnowModel{FT}) where {FT}
         # unless there is already snow on the ground. 
         @. p.snow.total_water_flux =
             -P_snow +
-            (-P_liq - p.snow.evaporation + p.snow.water_runoff) *
+            (- p.snow.evaporation + p.snow.water_runoff) *
             heaviside(Y.snow.S - eps(FT))
         @. p.snow.snow_water_flux =
             clip_dSdt(Y.snow.S, p.snow.total_water_flux, model.parameters.Δt)

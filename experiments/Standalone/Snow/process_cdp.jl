@@ -41,16 +41,17 @@ LW_d = (t) -> eltype(t)(Spline1D(seconds, LWdown)(t))
 # double check!
 lat = FT(45.28)
 long = FT(5.77)
-
+ref_time = DateTime("2009-01-01-00", "yyyy-mm-dd-HH")
 function zenith_angle(
     t::FT,
-    orbital_data;
+    orbital_data,
+    ref_time;
     latitude = lat,
     longitude = long,
     insol_params = earth_param_set.insol_params,
 ) where {FT}
     # This should be time in UTC - double check!
-    dt = DateTime("2009-01-01-00", "yyyy-mm-dd-HH") + Dates.Second(round(t))
+    dt = ref_time + Dates.Second(round(t))
     FT(
         instantaneous_zenith_angle(
             dt,
@@ -61,10 +62,12 @@ function zenith_angle(
         )[1],
     )
 end
+
 rad = PrescribedRadiativeFluxes(
     FT,
     SW_d,
-    LW_d;
+    LW_d,
+    ref_time;
     θs = zenith_angle,
     orbital_data = Insolation.OrbitalData(),
 )
@@ -85,6 +88,7 @@ atmos = PrescribedAtmosphere(
     u_atmos,
     q_atmos,
     P_atmos,
+    ref_time,
     h_atmos,
 )
 # Meteorological data
