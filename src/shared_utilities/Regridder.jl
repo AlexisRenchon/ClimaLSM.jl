@@ -53,7 +53,7 @@ function reshape_cgll_sparse_to_field!(
     hspace = ClimaCore.Spaces.horizontal_space(space)
     target = ClimaCore.Fields.field_values(field)
 
-    ClimaCore.Spaces.dss2!(target, topology, hspace.quadrature_style)
+    ClimaCore.Topologies.dss!(target, topology)
 end
 
 """
@@ -180,13 +180,21 @@ function hdwrite_regridfile_rll_to_cgll(
     meshfile_overlap = joinpath(REGRID_DIR, outfile_root * "_mesh_overlap.g")
     weightfile = joinpath(REGRID_DIR, outfile_root * "_remap_weights.nc")
 
+    # If doesn't make sense to regrid with GPUs/MPI processes
+    cpu_context =
+        ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
+
     topology = ClimaCore.Topologies.Topology2D(
-        space.topology.mesh,
-        ClimaCore.Topologies.spacefillingcurve(space.topology.mesh),
+        cpu_context,
+        ClimaCore.Spaces.topology(space).mesh,
+        ClimaCore.Topologies.spacefillingcurve(
+            ClimaCore.Spaces.topology(space).mesh,
+        ),
     )
     Nq =
-        ClimaCore.Spaces.Quadratures.polynomial_degree(space.quadrature_style) +
-        1
+        ClimaCore.Spaces.Quadratures.polynomial_degree(
+            ClimaCore.Spaces.quadrature_style(space),
+        ) + 1
     space_undistributed = ClimaCore.Spaces.SpectralElementSpace2D(
         topology,
         ClimaCore.Spaces.Quadratures.GLL{Nq}(),
@@ -228,11 +236,11 @@ function hdwrite_regridfile_rll_to_cgll(
                 Dates.DateTime.(
                     reinterpret.(
                         Ref(NCDatasets.DateTimeStandard),
-                        ds["time"][:],
+                        Array(ds["time"]),
                     )
                 )
         elseif "date" in ds
-            data_dates = strdate_to_datetime.(string.(ds["date"][:]))
+            data_dates = strdate_to_datetime.(string.(Array(ds["date"])))
         else
             @warn "No dates available in file $datafile_rll"
             data_dates = [Dates.DateTime(0)]
@@ -242,7 +250,7 @@ function hdwrite_regridfile_rll_to_cgll(
     # read the remapped file with sparse matrices
     offline_outvector, times = NCDataset(datafile_cgll, "r") do ds_wt
         (
-            offline_outvector = ds_wt[varname][:][:, :], # ncol, times
+            offline_outvector = Array(ds_wt[varname])[:, :], # ncol, times
             times = get_time(ds_wt),
         )
     end
@@ -281,7 +289,6 @@ function hdwrite_regridfile_rll_to_cgll(
     )
 
     # TODO: extend write! to handle time-dependent fields
-    comms_ctx = space.topology.context
     map(
         x -> write_to_hdf5(
             REGRID_DIR,
@@ -289,7 +296,7 @@ function hdwrite_regridfile_rll_to_cgll(
             times[x],
             offline_fields[x],
             varname,
-            comms_ctx,
+            cpu_context,
         ),
         1:length(times),
     )
@@ -341,11 +348,11 @@ function regrid_netcdf_to_field(
     return nans_to_zero.(field)
 end
 
-
 function swap_space!(field, new_space)
-    field_out = zeros(new_space)
-    parent(field_out) .= parent(field)
-    return field_out
+    return ClimaCore.Fields.Field(
+        ClimaCore.Fields.field_values(field),
+        new_space,
+    )
 end
 
 end

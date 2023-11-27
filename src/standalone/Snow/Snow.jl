@@ -1,6 +1,5 @@
 module Snow
 
-using UnPack
 using DocStringExtensions
 import ...Parameters as LSMP
 export SnowParameters
@@ -30,13 +29,13 @@ struct SnowParameters{FT <: AbstractFloat, PSE}
     "Thermal conductivity of ice (W/m/K)"
     κ_ice::FT
     "Timestep of the model"
-    Δt::FT
+    Δt::Any
     "Clima-wide parameters"
     earth_param_set::PSE
 end
 
 """
-   SnowParameters{FT}(Δt::FT;
+   SnowParameters{FT}(Δt;
                       ρ_snow = FT(200),
                       z_0m = FT(0.0024),
                       z_0b = FT(0.00024),
@@ -52,7 +51,7 @@ An outer constructor for `SnowParameters` which supplies defaults for
 all arguments but `earth_param_set`.
 """
 function SnowParameters{FT}(
-    Δt::FT;
+    Δt;
     ρ_snow = FT(200),
     z_0m = FT(0.0024),
     z_0b = FT(0.00024),
@@ -63,7 +62,7 @@ function SnowParameters{FT}(
     fS_c = FT(0.2),
     κ_ice = FT(2.21),
     earth_param_set::PSE,
-) where {FT, PSE}
+) where {FT <: AbstractFloat, PSE}
     return SnowParameters{FT, PSE}(
         ρ_snow,
         z_0m,

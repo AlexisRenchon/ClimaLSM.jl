@@ -2,7 +2,7 @@
 an in-progress prototype interface for running land models in integrated (multi-
 component) or standalone (single component) modes.
 
-Recommended Julia Version: Stable release v1.9.3. CI no longer tests earlier
+Recommended Julia Version: Stable release v1.9.4. CI no longer tests earlier
 versions of Julia.
 
 ## Models
@@ -65,6 +65,3 @@ SoilPlantHydrologyModel <: AbstractLandModel <: AbstractModel (constructs the in
 
 [codecov-img]: https://codecov.io/gh/CliMA/ClimaLSM.jl/branch/main/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/CliMA/ClimaLSM.jl
-
-[bors-img]: https://bors.tech/images/badge_small.svg
-[bors-url]: https://app.bors.tech/repositories/40649

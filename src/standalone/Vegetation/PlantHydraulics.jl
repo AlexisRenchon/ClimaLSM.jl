@@ -25,7 +25,7 @@ export PlantHydraulicsModel,
     augmented_liquid_fraction,
     water_retention_curve,
     inverse_water_retention_curve,
-    root_flux_per_ground_area!,
+    root_water_flux_per_ground_area!,
     PlantHydraulicsParameters,
     PrescribedTranspiration,
     DiagnosticTranspiration,
@@ -315,7 +315,7 @@ function ClimaLSM.Canopy.update_canopy_prescribed_field!(
     t,
 ) where {FT}
     (; LAIfunction) = component.parameters.ai_parameterization
-    @. p.canopy.hydraulics.area_index.leaf = LAIfunction(t)
+    @. p.canopy.hydraulics.area_index.leaf = FT(LAIfunction(t))
 end
 
 
@@ -519,14 +519,16 @@ zero because they are scaled by AI.
 To prevent dividing by zero, we change AI/(AI x dz)" to
 "AI/max(AI x dz, eps(FT))"
 """
-function make_compute_exp_tendency(model::PlantHydraulicsModel, canopy)
+function make_compute_exp_tendency(
+    model::PlantHydraulicsModel{FT},
+    canopy,
+) where {FT}
     function compute_exp_tendency!(dY, Y, p, t)
         area_index = p.canopy.hydraulics.area_index
         n_stem = model.n_stem
         n_leaf = model.n_leaf
         fa = p.canopy.hydraulics.fa
         fa_roots = p.canopy.hydraulics.fa_roots
-        FT = eltype(t)
 
         # Inside of a loop, we need to use a single dollar sign
         # for indexing into Fields of Tuples in non broadcasted
@@ -548,15 +550,6 @@ function make_compute_exp_tendency(model::PlantHydraulicsModel, canopy)
                     eps(FT),
                 )
             if i == 1
-                # All fluxes `fa` are per unit area of ground
-                root_flux_per_ground_area!(
-                    fa_roots,
-                    canopy.soil_driver,
-                    model,
-                    Y,
-                    p,
-                    t,
-                )
                 @inbounds @. dY.canopy.hydraulics.ϑ_l.:($$i) =
                     1 / AIdz * (fa_roots - fa.:($$i))
             else
@@ -569,29 +562,29 @@ function make_compute_exp_tendency(model::PlantHydraulicsModel, canopy)
 end
 
 """
-    root_flux_per_ground_area!(
+    root_water_flux_per_ground_area!(
         fa::ClimaCore.Fields.Field,
         s::PrescribedSoil{FT},
         model::PlantHydraulicsModel{FT},
         Y::ClimaCore.Fields.FieldVector,
         p::NamedTuple,
-        t::FT,
-    )::FT where {FT}
+        t,
+    ) where {FT}
 
-A method which computes the flux between the soil and the stem, via the roots,
+A method which computes the water flux between the soil and the stem, via the roots,
 and multiplied by the RAI, in the case of a model running without an integrated
 soil model.
 
 The returned flux is per unit ground area. This assumes that the stem compartment
 is the first element of `Y.canopy.hydraulics.ϑ_l`.
 """
-function root_flux_per_ground_area!(
+function root_water_flux_per_ground_area!(
     fa::ClimaCore.Fields.Field,
     s::PrescribedSoil{FT},
     model::PlantHydraulicsModel{FT},
     Y::ClimaCore.Fields.FieldVector,
     p::NamedTuple,
-    t::FT,
+    t,
 ) where {FT}
 
     (; conductivity_model, root_distribution) = model.parameters
@@ -601,7 +594,7 @@ function root_flux_per_ground_area!(
     ψ_base = p.canopy.hydraulics.ψ.:1
     root_depths = s.root_depths
     n_root_layers = length(root_depths)
-    ψ_soil::FT = s.ψ_soil(t)
+    ψ_soil::FT = s.ψ(t)
     fa .= FT(0.0)
     @inbounds for i in 1:n_root_layers
         if i != n_root_layers
@@ -655,7 +648,7 @@ end
         transpiration::PrescribedTranspiration{FT},
         Y,
         p,
-        t::FT,
+        t,
     )::FT where {FT}
 
 A method which computes the transpiration in meters/sec between the leaf
@@ -669,9 +662,9 @@ function transpiration_per_ground_area(
     transpiration::PrescribedTranspiration{FT},
     _,
     _,
-    t::FT,
+    t,
 )::FT where {FT}
-    return transpiration.T(t) # (m/s)
+    return FT(transpiration.T(t)) # (m/s)
 end
 
 """

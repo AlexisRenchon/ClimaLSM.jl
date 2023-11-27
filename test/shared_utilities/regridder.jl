@@ -10,31 +10,33 @@ using ClimaComms
 using ClimaCore
 using Test
 
+FT = Float32
 
-@testset "Spatially varying map - regrid to field" begin
-    FT = Float32
-    path = bareground_albedo_dataset_path()
+@testset "Spatially varying map - regrid to field, FT = $FT" begin
+    get_infile = bareground_albedo_dataset_path
+    infile_path = get_infile()
+
     regrid_dirpath =
         joinpath(pkgdir(ClimaLSM), "test/standalone/Bucket/regridder_tmpfiles")
     mkpath(regrid_dirpath)
 
-    varname = "sw_alb"
-    albedo = PrescribedDataStatic(path, regrid_dirpath, varname)
-
     surface_domain =
         SphericalSurface(; radius = FT(1), nelements = 2, npolynomial = 3)
     boundary_space = surface_domain.space.surface
-    comms = boundary_space.topology.context
+    comms_ctx = ClimaComms.context(boundary_space)
+    varname = "sw_alb"
     field = regrid_netcdf_to_field(
         FT,
         regrid_dirpath,
-        comms,
-        path,
+        comms_ctx,
+        infile_path,
         varname,
         boundary_space,
     )
     @test axes(field) == boundary_space
 
+    albedo =
+        PrescribedDataStatic(get_infile, regrid_dirpath, varname, comms_ctx)
 
     p = (; :bucket => (; :α_sfc => ClimaCore.Fields.zeros(boundary_space)))
     set_initial_parameter_field!(
@@ -44,5 +46,4 @@ using Test
     )
     @test p.bucket.α_sfc == field
     rm(regrid_dirpath, recursive = true)
-
 end

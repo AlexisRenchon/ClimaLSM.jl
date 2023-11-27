@@ -16,6 +16,7 @@ using ClimaCore: Fields, Spaces
 using Dates
 using JLD2
 using CFTime
+using NCDatasets
 
 using ClimaLSM.Regridder
 
@@ -123,18 +124,19 @@ objects if we're reading in data over time for multiple variables.
 
 # Inputs:
 - date_ref::D    # a reference date before or at the start of the simulation
-- t_start::FT    # time in seconds since `date_ref`
+- t_start        # time in seconds since `date_ref`
 """
-struct SimInfo{D, FT}
+struct SimInfo{D}
     date_ref::D
-    t_start::FT
+    t_start::Any
 end
 
 """
     PrescribedDataStatic(
-        infile_path::String,
+        get_infile::Function,
         regrid_dirpath::String,
         varname::String,
+        commx_ctx::ClimaComms.AbstractCommsContext,
     )
 
 Constructor for the `PrescribedDataStatic`` type.
@@ -144,25 +146,33 @@ simulation grid. Date-related args (last 3 to FileInfo) are unused for static
 data maps.
 """
 function PrescribedDataStatic(
-    infile_path::String,
+    get_infile::Function,
     regrid_dirpath::String,
     varname::String,
+    comms_ctx::ClimaComms.AbstractCommsContext,
 )
+    # Download `infile_path` artifact on root process first to avoid race condition
+    if ClimaComms.iamroot(comms_ctx)
+        infile_path = get_infile()
+    end
+    ClimaComms.barrier(comms_ctx)
+    infile_path = get_infile()
+
     file_info = FileInfo(infile_path, regrid_dirpath, varname, "", [], [])
     return PrescribedDataStatic(file_info)
 end
 
 
 """
-    PrescribedDataTemporal(
+    PrescribedDataTemporal{FT}(
         regrid_dirpath,
-        infile_path,
+        get_infile,
         varname,
         date_ref,
         t_start,
         surface_space;
         mono = true,
-    )
+    ) where {FT <: AbstractFloat}
 
 Constructor for the `PrescribedDataTemporal` type.
 Regrids from the input lat-lon grid to the simulation cgll grid, saving
@@ -172,7 +182,7 @@ data packaged into a single `PrescribedDataTemporal` struct.
 
 # Arguments
 - `regrid_dirpath`   # directory the data file is stored in.
-- `infile_path`      # NCDataset file containing data to regrid.
+- `get_infile`       # function returning path to NCDataset file containing data to regrid.
 - `varname`          # name of the variable to be regridded.
 - `date_ref`         # reference date to coordinate start of the simulation
 - `t_start`          # start time of the simulation relative to `date_ref` (date_start = date_ref + t_start)
@@ -182,20 +192,22 @@ data packaged into a single `PrescribedDataTemporal` struct.
 # Returns
 - `PrescribedDataTemporal` object
 """
-function PrescribedDataTemporal(
+function PrescribedDataTemporal{FT}(
     regrid_dirpath::String,
-    infile_path::String,
+    get_infile::Function,
     varname::String,
     date_ref::Union{DateTime, DateTimeNoLeap},
-    t_start::FT,
+    t_start,
     surface_space::Spaces.AbstractSpace;
     mono::Bool = true,
-) where {FT}
-    comms_ctx = surface_space.topology.context
+) where {FT <: AbstractFloat}
+    comms_ctx = ClimaComms.context(surface_space)
     outfile_root = varname * "_cgll"
 
     # Regrid data at all times from lat/lon (RLL) to simulation grid (CGLL)
+    # Download `infile_path` artifact on root process first to avoid race condition
     if ClimaComms.iamroot(comms_ctx)
+        infile_path = get_infile()
         Regridder.hdwrite_regridfile_rll_to_cgll(
             FT,
             regrid_dirpath,
@@ -205,8 +217,18 @@ function PrescribedDataTemporal(
             outfile_root;
             mono = mono,
         )
+
+        NCDataset(infile_path, "r") do ds
+            if !("time" in keys(ds))
+                error(
+                    "Using a temporal albedo map requires data with time dimension.",
+                )
+            end
+        end
     end
     ClimaComms.barrier(comms_ctx)
+    infile_path = get_infile()
+
     all_dates = JLD2.load(
         joinpath(regrid_dirpath, outfile_root * "_times.jld2"),
         "times",
@@ -240,7 +262,8 @@ function PrescribedDataTemporal(
     file_state = FileState(data_fields, copy(date_idx0), segment_length)
     sim_info = SimInfo(date_ref, t_start)
 
-    return PrescribedDataTemporal(file_info, file_state, sim_info)
+    args = (file_info, file_state, sim_info)
+    return PrescribedDataTemporal{typeof.(args)...}(args...)
 end
 
 """
@@ -264,7 +287,7 @@ function read_data_fields!(
     date::DateTime,
     space::Spaces.AbstractSpace,
 )
-    comms_ctx = space.topology.context
+    comms_ctx = ClimaComms.context(space)
     pd_file_info = prescribed_data.file_info
     pd_file_state = prescribed_data.file_state
 
@@ -398,6 +421,8 @@ function interpolate_data(
     # Interpolate if the time period between dates is nonzero
     if segment_length[1] > FT(0) && date != all_dates[Int(date_idx[1])]
         Δt_tt1 = FT((date - all_dates[Int(date_idx[1])]).value)
+        interp_fraction = Δt_tt1 / FT(segment_length[1])
+        @assert abs(interp_fraction) <= FT(1) "time interpolation weights must be <= 1, but `interp_fraction` = $interp_fraction"
         return interpol.(
             data_fields[1],
             data_fields[2],
@@ -427,7 +452,6 @@ a segment `Δt_t2t1 = (t2 - t1)`, of fields `f1` and `f2`, with `t2 > t1`.
 """
 function interpol(f1::FT, f2::FT, Δt_tt1::FT, Δt_t2t1::FT) where {FT}
     interp_fraction = Δt_tt1 / Δt_t2t1
-    @assert abs(interp_fraction) <= FT(1) "time interpolation weights must be <= 1, but `interp_fraction` = $interp_fraction"
     return f1 * (FT(1) - interp_fraction) + f2 * (interp_fraction)
 end
 

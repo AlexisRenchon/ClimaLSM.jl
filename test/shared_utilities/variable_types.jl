@@ -17,9 +17,10 @@ using ClimaLSM.Domains: HybridBox, Column, Point
 using ClimaLSM.Domains: coordinates
 using ClimaLSM.Canopy: AbstractCanopyComponent
 
-@testset "Default model" begin
+FT = Float32
+@testset "Default model, FT = $FT" begin
     struct DefaultModel{FT} <: AbstractModel{FT} end
-    dm = DefaultModel{Float32}()
+    dm = DefaultModel{FT}()
     @test ClimaLSM.prognostic_vars(dm) == ()
     @test ClimaLSM.prognostic_types(dm) == ()
     @test ClimaLSM.prognostic_domain_names(dm) == ()
@@ -49,9 +50,9 @@ using ClimaLSM.Canopy: AbstractCanopyComponent
     @test x == [0, 1, 2, 3]
 end
 
-@testset "Default ImEx model" begin
+@testset "Default ImEx model, FT = $FT" begin
     struct DefaultImExModel{FT} <: AbstractImExModel{FT} end
-    dm_imex = DefaultImExModel{Float32}()
+    dm_imex = DefaultImExModel{FT}()
 
     x = [0, 1, 2, 3]
     dm_imp_tendency! = make_imp_tendency(dm_imex)
@@ -65,8 +66,9 @@ end
 end
 
 @testset "Default canopy component" begin
+    FT = Float64
     struct DefaultCanopyComponent{FT} <: AbstractCanopyComponent{FT} end
-    dcc = DefaultCanopyComponent{Float32}()
+    dcc = DefaultCanopyComponent{FT}()
     @test ClimaLSM.prognostic_vars(dcc) == ()
     @test ClimaLSM.prognostic_types(dcc) == ()
     @test ClimaLSM.prognostic_domain_names(dcc) == ()
@@ -83,7 +85,7 @@ end
     @test_throws MethodError make_compute_imp_tendency(dcc)
 end
 
-@testset "Variables" begin
+@testset "Variables, FT = $FT" begin
     struct Model{FT, D} <: AbstractModel{FT}
         domain::D
     end
@@ -97,7 +99,6 @@ end
     ClimaLSM.prognostic_domain_names(m::Model) = (:surface, :surface)
     ClimaLSM.auxiliary_domain_names(m::Model) = (:surface, :subsurface)
 
-    FT = Float64
     zmin = FT(1.0)
     zmax = FT(2.0)
     zlim = (zmin, zmax)
@@ -106,8 +107,8 @@ end
     column = Column(; zlim = zlim, nelements = nelements)
     m = Model{FT, typeof(column)}(column)
     Y, p, coords = initialize(m)
-    @test parent(Y.foo.a) == zeros(FT, 1)
-    @test parent(Y.foo.b) == zeros(FT, 2)
-    @test parent(p.foo.d) == zeros(FT, 1)
-    @test parent(p.foo.e) == zeros(FT, 5, 2)
+    @test Array(parent(Y.foo.a)) == zeros(FT, 1)
+    @test Array(parent(Y.foo.b)) == zeros(FT, 2)
+    @test Array(parent(p.foo.d)) == zeros(FT, 1)
+    @test Array(parent(p.foo.e)) == zeros(FT, 5, 2)
 end

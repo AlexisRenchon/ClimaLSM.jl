@@ -1,6 +1,5 @@
 module Biogeochemistry
 using ClimaLSM
-using UnPack
 using DocStringExtensions
 using ClimaCore
 import ...Parameters as LSMP
@@ -41,10 +40,6 @@ A struct for storing parameters of the `SoilCO2Model`.
 $(DocStringExtensions.FIELDS)
 """
 struct SoilCO2ModelParameters{FT <: AbstractFloat, PSE}
-    "Pressure at the surface of the soil (Pa)"
-    P_sfc::FT
-    "Diffusivity of soil C substrate in liquid (unitless)"
-    D_liq::FT
     "Soil porosity (m³ m⁻³)"
     ν::FT
     "Air-filled porosity at soil water potential of -100 cm H₂O (~ 10 Pa)"
@@ -53,6 +48,8 @@ struct SoilCO2ModelParameters{FT <: AbstractFloat, PSE}
     D_ref::FT
     "Absolute value of the slope of the line relating log(ψ) versus log(θ) (unitless)"
     b::FT
+    "Diffusivity of soil C substrate in liquid (unitless)"
+    D_liq::FT
     # DAMM
     "Pre-exponential factor (kg C m-3 s-1)"
     α_sx::FT
@@ -74,7 +71,6 @@ end
 
 """
     SoilCO2ModelParameters{FT}(;
-                                P_sfc = FT(101e3),
                                 ν = FT(0.556),
                                 θ_a100 = FT(0.1816),
                                 D_ref = FT(1.39e-5),
@@ -96,7 +92,6 @@ An outer constructor for creating the parameter struct of the `SoilCO2Model`,
     based on keyword arguments.
 """
 function SoilCO2ModelParameters{FT}(;
-    P_sfc = FT(101e3),
     ν = FT(0.556),
     θ_a100 = FT(0.1816),
     D_ref = FT(1.39e-5),
@@ -113,12 +108,11 @@ function SoilCO2ModelParameters{FT}(;
     earth_param_set::PSE,
 ) where {FT, PSE}
     return SoilCO2ModelParameters{FT, PSE}(
-        P_sfc,
-        D_liq,
         ν,
         θ_a100,
         D_ref,
         b,
+        D_liq,
         # DAMM
         α_sx,
         Ea_sx,
@@ -156,7 +150,7 @@ struct SoilCO2Model{FT, PS, D, BC, S, DT} <:
     boundary_conditions::BC
     "A tuple of sources, each of type AbstractSource"
     sources::S
-    " Drivers"
+    "Drivers"
     driver::DT
 end
 
@@ -167,7 +161,8 @@ SoilCO2Model{FT}(;
         domain::ClimaLSM.AbstractDomain,
         boundary_conditions::NamedTuple,
         sources::Tuple,
-    ) where {FT}
+        drivers::DT,
+    ) where {FT, BC, DT}
 
 A constructor for `SoilCO2Model`.
 """
@@ -283,14 +278,15 @@ function ClimaLSM.source!(
 end
 
 """
-    AbstractSoilDriver
+    AbstractSoilDriver{FT <: AbstractFloat}
 
-An abstract type for drivers of soil CO2 production.
+An abstract type for drivers of soil CO2 production and diffusion.
 These are soil temperature, soil moisture,
-root carbon, soil organic matter and microbe carbon.
-All varying in space (horizontally and vertically) and time.
+root carbon, soil organic matter and microbe carbon, and atmospheric pressure.
+Soil temperature and moisture, as well as soc, vary in space (horizontally and vertically) and time.
+Atmospheric pressure vary in time (defined at the surface only, not with depth).
 """
-abstract type AbstractSoilDriver end
+abstract type AbstractSoilDriver{FT <: AbstractFloat} end
 
 """
     SoilDrivers
@@ -301,11 +297,13 @@ or Prognostic (for running with a prognostic model for soil temp and moisture).
 
 $(DocStringExtensions.FIELDS)
 """
-struct SoilDrivers
+struct SoilDrivers{FT}
     "Soil temperature and moisture drivers - Prescribed or Prognostic"
-    met::AbstractSoilDriver
+    met::AbstractSoilDriver{FT}
     "Soil SOM driver - Prescribed only"
-    soc::AbstractSoilDriver
+    soc::AbstractSoilDriver{FT}
+    "Prescribed atmospheric variables"
+    atmos::PrescribedAtmosphere{FT}
 end
 
 """
@@ -319,10 +317,10 @@ without a prognostic soil model.
 
 $(DocStringExtensions.FIELDS)
 """
-struct PrescribedMet <: AbstractSoilDriver
-    "The temperature of the soil, of the form f(z::FT,t::FT) where FT <: AbstractFloat"
+struct PrescribedMet{FT} <: AbstractSoilDriver{FT}
+    "The temperature of the soil, of the form f(z::FT,t) where FT <: AbstractFloat"
     temperature::Function
-    "Soil moisture, of the form f(z::FT,t::FT) FT <: AbstractFloat"
+    "Soil moisture, of the form f(z::FT,t) FT <: AbstractFloat"
     volumetric_liquid_fraction::Function
 end
 
@@ -336,8 +334,8 @@ organic carbon model.
 
 $(DocStringExtensions.FIELDS)
 """
-struct PrescribedSOC <: AbstractSoilDriver
-    "Carbon content of soil organic matter, of the form f(z::FT,t::FT) where FT <: AbstractFloat"
+struct PrescribedSOC{FT} <: AbstractSoilDriver{FT}
+    "Carbon content of soil organic matter, of the form f(z::FT, t) where FT <: AbstractFloat"
     soil_organic_carbon::Function
 end
 
@@ -372,6 +370,15 @@ function soil_SOM_C(driver::PrescribedSOC, p, Y, t, z)
 end
 
 """
+    air_pressure(driver::PrescribedAtmosphere, t)
+
+Returns the prescribed air pressure at the top boundary condition at time (t).
+"""
+function air_pressure(driver::PrescribedAtmosphere, p, Y, t) # not sure if/why p and Y are needed?
+    return driver.P.(t) # not sure broadcast (.) is needed
+end
+
+"""
     make_update_aux(model::SoilCO2Model)
 
 An extension of the function `make_update_aux`, for the soilco2 equation.
@@ -381,13 +388,17 @@ This has been written so as to work with Differential Equations.jl.
 """
 function ClimaLSM.make_update_aux(model::SoilCO2Model)
     function update_aux!(p, Y, t)
+        # get FT to enforce types of variables not stored directly in `p`
+        FT = eltype(Y.soilco2.C)
         params = model.parameters
         z = ClimaCore.Fields.coordinate_field(model.domain.space.subsurface).z
-        T_soil = soil_temperature(model.driver.met, p, Y, t, z)
-        θ_l = soil_moisture(model.driver.met, p, Y, t, z)
-        Csom = soil_SOM_C(model.driver.soc, p, Y, t, z)
+        T_soil = FT.(soil_temperature(model.driver.met, p, Y, t, z))
+        θ_l = FT.(soil_moisture(model.driver.met, p, Y, t, z))
+        Csom = FT.(soil_SOM_C(model.driver.soc, p, Y, t, z))
+        P_sfc = FT.(air_pressure(model.driver.atmos, p, Y, t))
         θ_w = θ_l
-        p.soilco2.D .= co2_diffusivity.(T_soil, θ_w, Ref(params))
+
+        p.soilco2.D .= co2_diffusivity.(T_soil, θ_w, P_sfc, Ref(params))
         p.soilco2.Sm .= microbe_source.(T_soil, θ_l, Csom, Ref(params))
     end
     return update_aux!
@@ -418,8 +429,8 @@ end
         Δz::ClimaCore.Fields.Field,
         Y::ClimaCore.Fields.FieldVector,
         p::NamedTuple,
-        t::FT,
-    )::ClimaCore.Fields.Field where {FT}
+        t,
+    )::ClimaCore.Fields.Field
 
 A method of ClimaLSM.boundary_flux which returns the soilco2
 flux (kg CO2 /m^2/s) in the case of a prescribed flux BC at either the top
@@ -431,9 +442,10 @@ function ClimaLSM.boundary_flux(
     Δz::ClimaCore.Fields.Field,
     Y::ClimaCore.Fields.FieldVector,
     p::NamedTuple,
-    t::FT,
-)::ClimaCore.Fields.Field where {FT}
-    return bc.bc(p, t) .+ ClimaCore.Fields.zeros(axes(Δz))
+    t,
+)::ClimaCore.Fields.Field
+    FT = eltype(Δz)
+    return FT.(bc.bc(p, t)) .+ FT.(ClimaCore.Fields.zeros(axes(Δz)))
 end
 
 """
@@ -454,8 +466,8 @@ end
     Δz::ClimaCore.Fields.Field,
     Y::ClimaCore.Fields.FieldVector,
     p::NamedTuple,
-    t::FT,
-    )::ClimaCore.Fields.Field where {FT}
+    t,
+    )::ClimaCore.Fields.Field
 
 A method of ClimaLSM.boundary_flux which returns the soilco2
 flux in the case of a prescribed state BC at
@@ -467,12 +479,13 @@ function ClimaLSM.boundary_flux(
     Δz::ClimaCore.Fields.Field,
     Y::ClimaCore.Fields.FieldVector,
     p::NamedTuple,
-    t::FT,
-)::ClimaCore.Fields.Field where {FT}
+    t,
+)::ClimaCore.Fields.Field
+    FT = eltype(Δz)
     p_len = Spaces.nlevels(axes(p.soilco2.D))
     D_c = Fields.level(p.soilco2.D, p_len)
     C_c = Fields.level(Y.soilco2.C, p_len)
-    C_bc = bc.bc(p, t)
+    C_bc = FT.(bc.bc(p, t))
     return ClimaLSM.diffusive_flux(D_c, C_bc, C_c, Δz)
 end
 
@@ -483,8 +496,8 @@ end
         Δz::ClimaCore.Fields.Field,
         Y::ClimaCore.Fields.FieldVector,
         p::NamedTuple,
-        t::FT,
-    )::ClimaCore.Fields.Field where {FT}
+        t,
+    )::ClimaCore.Fields.Field
 
 A method of ClimaLSM.boundary_flux which returns the soilco2
 flux in the case of a prescribed state BC at
@@ -496,11 +509,12 @@ function ClimaLSM.boundary_flux(
     Δz::ClimaCore.Fields.Field,
     Y::ClimaCore.Fields.FieldVector,
     p::NamedTuple,
-    t::FT,
-)::ClimaCore.Fields.Field where {FT}
+    t,
+)::ClimaCore.Fields.Field
+    FT = eltype(Δz)
     D_c = Fields.level(p.soilco2.D, 1)
     C_c = Fields.level(Y.soilco2.C, 1)
-    C_bc = bc.bc(p, t)
+    C_bc = FT.(bc.bc(p, t))
     return ClimaLSM.diffusive_flux(D_c, C_c, C_bc, Δz)
 end
 

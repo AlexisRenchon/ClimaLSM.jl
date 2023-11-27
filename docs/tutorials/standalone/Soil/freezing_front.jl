@@ -92,7 +92,7 @@ include(joinpath(pkgdir(ClimaLSM), "parameters", "create_parameters.jl"));
 # # Preliminary set-up
 
 # Choose a floating point precision, and get the parameter set, which holds constants used across CliMA models:
-FT = Float64
+FT = Float32
 earth_param_set = create_lsm_parameters(FT);
 
 # Set the values of other parameters required by the model:
@@ -141,19 +141,21 @@ params = Soil.EnergyHydrologyParameters{FT}(;
 zmax = FT(0)
 zmin = FT(-0.2)
 nelems = 20
-Δz = 0.01
+Δz = FT(0.01)
 soil_domain = Column(; zlim = (zmin, zmax), nelements = nelems);
 
 # Set the boundary conditions:
-zero_flux_bc = FluxBC((p, t) -> eltype(t)(0.0))
+zero_flux_bc = FluxBC((p, t) -> 0.0)
 function top_heat_flux(p, t)
+    FT = eltype(p.soil.T)
     p_len = ClimaCore.Spaces.nlevels(axes(p.soil.T))
     T_c = ClimaCore.Fields.level(p.soil.T, p_len)
-    return @. eltype(t)(28 * (T_c - 267.15))
+    return @. FT(28 * (T_c - 267.15))
 end
 function bottom_heat_flux(p, t)
+    FT = eltype(p.soil.T)
     T_c = ClimaCore.Fields.level(p.soil.T, 1)
-    return @. eltype(t)(-3 * (T_c - 279.85))
+    return @. FT(-3 * (T_c - 279.85))
 end
 top_heat_flux_bc = FluxBC(top_heat_flux)
 bottom_heat_flux_bc = FluxBC(bottom_heat_flux)
@@ -194,7 +196,7 @@ Y, p, coords = initialize(soil);
 
 function init_soil!(Ysoil, z, params)
     ν = params.ν
-    FT = eltype(Y.soil.ϑ_l)
+    FT = eltype(Ysoil.soil.ϑ_l)
     Ysoil.soil.ϑ_l .= FT(0.33)
     Ysoil.soil.θ_i .= FT(0.0)
     T = FT(279.85)
@@ -206,8 +208,8 @@ end
 init_soil!(Y, coords.subsurface.z, soil.parameters);
 
 # We choose the initial and final simulation times:
-t0 = FT(0)
-tf = FT(60 * 60 * 50);
+t0 = Float64(0)
+tf = Float64(60 * 60 * 50);
 
 # We set the aux state corresponding to the initial conditions
 # of the state Y:
@@ -215,7 +217,7 @@ set_initial_aux_state! = make_set_initial_aux_state(soil);
 set_initial_aux_state!(p, Y, t0);
 # Create the tendency function, and choose a timestep, and timestepper:
 exp_tendency! = make_exp_tendency(soil)
-dt = FT(60)
+dt = Float64(60)
 timestepper = CTS.RK4()
 ode_algo = CTS.ExplicitAlgorithm(timestepper)
 prob = SciMLBase.ODEProblem(

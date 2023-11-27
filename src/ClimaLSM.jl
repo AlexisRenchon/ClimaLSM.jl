@@ -1,5 +1,4 @@
 module ClimaLSM
-using UnPack
 using DocStringExtensions
 
 using ClimaCore
@@ -53,7 +52,7 @@ Returns a NamedTuple of the unique set of coordinates for the LSM
 `model`, where the unique set is taken over the coordinates of all
 of the subcomponents.
 
-For example, an LSM with a single layer snow model, multi-layer 
+For example, an LSM with a single layer snow model, multi-layer
 soil model, and canopy model would have a coordinate set corresponding
 to the coordinates of the surface (snow), the subsurface coordinates (soil)
 and the coordinates of the surface (canopy). This would return the coordinates
@@ -296,7 +295,12 @@ using .Snow
 include("standalone/Vegetation/Canopy.jl")
 using .Canopy
 using .Canopy.PlantHydraulics
-import .Canopy.PlantHydraulics: root_flux_per_ground_area!
+import .Canopy.PlantHydraulics: root_water_flux_per_ground_area!
+import .Canopy:
+    ground_albedo_PAR,
+    ground_albedo_NIR,
+    canopy_radiant_energy_fluxes!,
+    root_energy_flux_per_ground_area!
 ### Concrete types of AbstractLandModels
 ### and associated methods
 include("integrated/soil_energy_hydrology_biogeochemistry.jl")

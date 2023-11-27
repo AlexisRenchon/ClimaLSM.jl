@@ -1,8 +1,15 @@
+## Dataset obtained from Ameriflux. Funding for the AmeriFlux data portal was provided by the U.S. Department of Energy Office of Science.
+## Missouri Ozark site
+## Citation: Jeffrey Wood, Lianhong Gu (2021),
+## AmeriFlux FLUXNET-1F US-MOz Missouri Ozark Site, Ver. 3-5, AmeriFlux AMP, (Dataset). https://doi.org/10.17190/AMF/1854370
+
 using ArtifactWrappers
 using DelimitedFiles
 using Dierckx
 using Thermodynamics
 using Dates
+import Insolation
+
 function replace_missing_with_mean!(field, flag)
     good_indices = (flag .== 0) .|| (flag .== 1)
     fill_value = mean(field[good_indices])
@@ -18,7 +25,7 @@ function replace_missing_with_mean_by_value!(field)
 end
 
 # Fluxnet Ozark (CO2 and H2O fluxes and met drivers)
-# 2005 data extracted as follows:
+# 2005 data extracted from the full Fluxnet data for the site as follows:
 #af = ArtifactFile(
 #    url = "https://caltech.box.com/shared/static/cy4jlul43kx72r2pqthvm4isjwkatgxy.csv",
 #    filename = "AMF_US-MOz_FLUXNET_FULLSET_HH_2004-2019_3-5.csv",
@@ -37,12 +44,13 @@ af = ArtifactFile(
     url = "https://caltech.box.com/shared/static/1uwg8rjg2wx7y0vp8j9kv2d44y3fajyk.csv",
     filename = "AMF_US-MOz_FLUXNET_FULLSET_HH_2005.csv",
 )
-dataset = ArtifactWrapper(@__DIR__, "ameriflux_data", ArtifactFile[af]);
+dataset = ArtifactWrapper(@__DIR__, "ameriflux_data-US-MOz", ArtifactFile[af]);
 dataset_path = get_data_folder(dataset);
-data = joinpath(dataset_path, "AMF_US-MOz_FLUXNET_FULLSET_HH_2005.csv");
+data = joinpath(dataset_path, af.filename)
 driver_data = readdlm(data, ',')
 
 column_names = driver_data[1, :]
+RECO = driver_data[2:end, column_names .== "RECO_DT_VUT_REF"] .* 1e-6 # to convert from micromol to mol.
 TA = driver_data[2:end, column_names .== "TA_F"] .+ 273.15; # convert C to K
 VPD = driver_data[2:end, column_names .== "VPD_F"] .* 100; # convert hPa to Pa
 PA = driver_data[2:end, column_names .== "PA_F"] .* 1000; # convert kPa to Pa
@@ -99,8 +107,12 @@ atmos_u = Spline1D(seconds, WS[:])
 LW_IN_spline = Spline1D(seconds, LW_IN[:])
 SW_IN_spline = Spline1D(seconds, SW_IN[:])
 atmos_h = FT(32)
-precipitation_function(t::FT) where {FT} = p_spline(t) < 0.0 ? p_spline(t) : 0.0 # m/s
-snow_precip(t) = eltype(t)(0) # this is likely not correct
+
+function precipitation_function(t)
+    spline = p_spline(t)
+    spline < 0 ? spline : 0 # m/s
+end
+snow_precip(t) = 0 # this is likely not correct
 
 
 # Construct the drivers. For the reference time we will use the UTC time at the
@@ -121,22 +133,32 @@ lat = FT(38.7441) # degree
 long = FT(-92.2000) # degree
 
 function zenith_angle(
-    t::FT,
-    orbital_data,
+    t,
     ref_time;
     latitude = lat,
     longitude = long,
-    insol_params = earth_param_set.insol_params,
+    insol_params::Insolation.Parameters.InsolationParameters{FT} = earth_param_set.insol_params,
 ) where {FT}
     # This should be time in UTC
-    dt = ref_time + Dates.Second(round(t))
+    current_datetime = ref_time + Dates.Second(round(t))
+
+    # Orbital Data uses Float64, so we need to convert to our sim FT
+    d, δ, η_UTC =
+        FT.(
+            Insolation.helper_instantaneous_zenith_angle(
+                current_datetime,
+                ref_time,
+                insol_params,
+            )
+        )
+
     FT(
-        instantaneous_zenith_angle(
-            dt,
-            orbital_data,
+        Insolation.instantaneous_zenith_angle(
+            d,
+            δ,
+            η_UTC,
             longitude,
             latitude,
-            insol_params,
         )[1],
     )
 end
@@ -148,7 +170,6 @@ radiation = ClimaLSM.PrescribedRadiativeFluxes(
     LW_IN_spline,
     UTC_DATETIME[1];
     θs = zenith_angle,
-    orbital_data = Insolation.OrbitalData(),
 )
 
 
@@ -165,4 +186,4 @@ LAI_column_names = LAI_data[1, :]
 LAI_data = LAI_data[2:end, LAI_column_names .== "lai_mean"] #m2.m-2
 # This has the same timestamp as the driver data, so it's ok to use the time column from that file here
 LAIspline = Spline1D(seconds, LAI_data[:])
-LAIfunction = (t) -> eltype(t)(LAIspline(t))
+LAIfunction = (t) -> LAIspline(t)

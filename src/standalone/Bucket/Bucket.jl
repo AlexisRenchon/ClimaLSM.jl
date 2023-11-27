@@ -1,5 +1,4 @@
 module Bucket
-using UnPack
 using DocStringExtensions
 using Thermodynamics
 using Dates
@@ -101,24 +100,30 @@ end
 
 """
     BulkAlbedoStatic{FT}(
-        regrid_dirpath::String;
+        regrid_dirpath::String,
+        comms_ctx::ClimaComms.AbstractCommsContext;
         α_snow = FT(0.8),
         varname = "sw_alb",
-        infile_path = Bucket.bareground_albedo_dataset_path(),
+        get_infile::Function = Bucket.bareground_albedo_dataset_path,
     ) where {FT}
 
-Constructor for the BulkAlbedoStatic that implements a default albedo map, `comms` context, and value for `α_snow`.
-The `varname` must correspond to the name of the variable in the NetCDF file specified by `path`.
+Constructor for the BulkAlbedoStatic that implements a default albedo map,
+`comms` context, and value for `α_snow`.
+The `varname` must correspond to the name of the variable in the NetCDF
+file retrieved by `infile_path`.
+`infile_path` is a function that uses ArtifactWrappers.jl to return a path to
+the data file and download the data if it doesn't already exist on the machine.
 
-The `bareground_albedo_dataset_path` artifact can be used as a default with this type.
+The `bareground_albedo_dataset_path` artifact will be used as a default with this type.
 """
 function BulkAlbedoStatic{FT}(
-    regrid_dirpath::String;
+    regrid_dirpath::String,
+    comms_ctx::ClimaComms.AbstractCommsContext;
     α_snow = FT(0.8),
     varname = "sw_alb",
-    infile_path = Bucket.bareground_albedo_dataset_path(),
+    get_infile::Function = Bucket.bareground_albedo_dataset_path,
 ) where {FT}
-    α_sfc = PrescribedDataStatic(infile_path, regrid_dirpath, varname)
+    α_sfc = PrescribedDataStatic(get_infile, regrid_dirpath, varname, comms_ctx)
     return BulkAlbedoStatic{FT}(α_snow, α_sfc)
 end
 
@@ -141,42 +146,37 @@ end
     BulkAlbedoTemporal{FT}(
         regrid_dirpath::String,
         date_ref::Union{DateTime, DateTimeNoLeap},
-        t_start::FT,
+        t_start,
         Space::ClimaCore.Spaces.AbstractSpace;
-        infile_path = Bucket.cesm2_albedo_dataset_path(),
+        get_infile = Bucket.cesm2_albedo_dataset_path,
         varname = "sw_alb"
     ) where {FT}
 
 Constructor for the BulkAlbedoTemporal struct.
 The `varname` must correspond to the name of the variable in the NetCDF
-file specified by `infile_path`.
+file retrieved by the `get_infile` function.
+`get_infile` uses ArtifactWrappers.jl to return a path to the data file
+and download the data if it doesn't already exist on the machine.
 The input data file must have a time component; otherwise BulkAlbedoStatic
 should be used.
 """
 function BulkAlbedoTemporal{FT}(
     regrid_dirpath::String,
     date_ref::Union{DateTime, DateTimeNoLeap},
-    t_start::FT,
+    t_start,
     space::ClimaCore.Spaces.AbstractSpace;
-    infile_path = Bucket.cesm2_albedo_dataset_path(),
+    get_infile = Bucket.cesm2_albedo_dataset_path,
     varname = "sw_alb",
 ) where {FT}
     # Verify inputs
     if typeof(space) <: ClimaCore.Spaces.PointSpace
         error("Using an albedo map requires a global run.")
     end
-    NCDataset(infile_path, "r") do ds
-        if !("time" in keys(ds))
-            error(
-                "Using a temporal albedo map requires data with time dimension.",
-            )
-        end
-    end
 
     # Construct object containing info to read in surface albedo over time
-    data_info = PrescribedDataTemporal(
+    data_info = PrescribedDataTemporal{FT}(
         regrid_dirpath,
-        infile_path,
+        get_infile,
         varname,
         date_ref,
         t_start,
@@ -383,7 +383,7 @@ function set_initial_parameter_field!(
     surface_coords,
 ) where {FT}
     space = axes(surface_coords)
-    comms_ctx = space.topology.context
+    comms_ctx = ClimaComms.context(space)
     α_sfc = albedo.α_sfc
     (; infile_path, regrid_dirpath, varname) = α_sfc.file_info
 
@@ -436,7 +436,7 @@ Creates the compute_exp_tendency! function for the bucket model.
 """
 function make_compute_exp_tendency(model::BucketModel{FT}) where {FT}
     function compute_exp_tendency!(dY, Y, p, t)
-        @unpack κ_soil, ρc_soil, σS_c, W_f = model.parameters
+        (; κ_soil, ρc_soil, σS_c, W_f) = model.parameters
 
         #Currently, the entire surface is assumed to be
         # snow covered entirely or not at all.
@@ -451,13 +451,13 @@ function make_compute_exp_tendency(model::BucketModel{FT}) where {FT}
 
         # The below is NOT CORRECT if we want the snow
         # cover fraction to be intermediate between 0 and 1.
-        @unpack turbulent_energy_flux, R_n, evaporation = p.bucket
+        (; turbulent_energy_flux, R_n, evaporation) = p.bucket
         F_sfc = @. (R_n + turbulent_energy_flux) # Eqn (15)
 
         _T_freeze = LSMP.T_freeze(model.parameters.earth_param_set)
         _LH_f0 = LSMP.LH_f0(model.parameters.earth_param_set)
         _ρ_liq = LSMP.ρ_cloud_liq(model.parameters.earth_param_set)
-        _ρLH_f0 = _ρ_liq * _LH_f0 # Latent heat per unti volume.
+        _ρLH_f0 = _ρ_liq * _LH_f0 # Latent heat per unit volume.
         # partition energy fluxes
         partitioned_fluxes =
             partition_surface_fluxes.(
