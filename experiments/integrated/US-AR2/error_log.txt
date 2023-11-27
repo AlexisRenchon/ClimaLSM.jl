@@ -1,0 +1,30 @@
+Error: UndefVarError(:prob)
+Stacktrace:
+
+Stacktrace:
+  [1] top-level scope
+    @ REPL[69]:2
+  [2] eval
+    @ ./boot.jl:370 [inlined]
+  [3] eval_user_input(ast::Any, backend::REPL.REPLBackend, mod::Module)
+    @ REPL /Applications/Julia-1.9.app/Contents/Resources/julia/share/julia/stdlib/v1.9/REPL/src/REPL.jl:153
+  [4] repl_backend_loop(backend::REPL.REPLBackend, get_module::Function)
+    @ REPL /Applications/Julia-1.9.app/Contents/Resources/julia/share/julia/stdlib/v1.9/REPL/src/REPL.jl:249
+  [5] start_repl_backend(backend::REPL.REPLBackend, consumer::Any; get_module::Function)
+    @ REPL /Applications/Julia-1.9.app/Contents/Resources/julia/share/julia/stdlib/v1.9/REPL/src/REPL.jl:234
+  [6] run_repl(repl::REPL.AbstractREPL, consumer::Any; backend_on_current_task::Bool, backend::Any)
+    @ REPL /Applications/Julia-1.9.app/Contents/Resources/julia/share/julia/stdlib/v1.9/REPL/src/REPL.jl:379
+  [7] run_repl(repl::REPL.AbstractREPL, consumer::Any)
+    @ REPL /Applications/Julia-1.9.app/Contents/Resources/julia/share/julia/stdlib/v1.9/REPL/src/REPL.jl:365
+  [8] (::Base.var"#1017#1019"{Bool, Bool, Bool})(REPL::Module)
+    @ Base ./client.jl:421
+  [9] #invokelatest#2
+    @ ./essentials.jl:816 [inlined]
+ [10] invokelatest
+    @ ./essentials.jl:813 [inlined]
+ [11] run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+    @ Base ./client.jl:405
+ [12] exec_options(opts::Base.JLOptions)
+    @ Base ./client.jl:322
+ [13] _start()
+    @ Base ./client.jl:522
