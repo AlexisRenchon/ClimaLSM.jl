@@ -1,7 +1,7 @@
 t0 = 21.0 * 3600 * 24
 N_days_spinup = 30
-N_days = N_days_spinup + 60
-dt = 40.0
+N_days = N_days_spinup + 100
+dt = 30.0
 tf = t0 + 3600 * 24 * N_days
 
 # Number of timesteps between saving output
