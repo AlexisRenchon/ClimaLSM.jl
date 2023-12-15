@@ -50,6 +50,7 @@ labels = (
     :SWC,
     :TS,
     :CO2,
+    :RECO,
 )
 
 # For every data column to be collected, name of the column in the file, 
@@ -71,6 +72,7 @@ collect_args = [
     ("SWC_F_MDS_1", (x) -> x ./ 100, "m^3/m^3")
     ("TS_F_MDS_1", (x) -> x .+ 273.15, "K")
     ("CO2_F_MDS", (x) -> x .* 1e-6, "mol")
+    ("RECO_DT_VUT_REF", (x) -> x .* 1e-6, "mol/m^-2/s")
 ]
 
 # Named tuple mapping every label to a DataColumn with the correct transformed 
