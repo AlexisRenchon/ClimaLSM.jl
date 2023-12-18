@@ -150,27 +150,19 @@ canopy_component_types = (;
 # Set up autotrophic respiration
 autotrophic_respiration_args = (;
     parameters = AutotrophicRespirationParameters{FT}(;
-        ne = ne,
         ηsl = ηsl,
-        σl = σl,
         μr = μr,
         μs = μs,
-        f1 = f1,
-        f2 = f2,
     )
 )
 # Set up radiative transfer
 radiative_transfer_args = (;
     parameters = TwoStreamParameters{FT}(;
         Ω = Ω,
-        ld = ld,
         α_PAR_leaf = α_PAR_leaf,
-        λ_γ_PAR = λ_γ_PAR,
-        λ_γ_NIR = λ_γ_NIR,
         τ_PAR_leaf = τ_PAR_leaf,
         α_NIR_leaf = α_NIR_leaf,
         τ_NIR_leaf = τ_NIR_leaf,
-        n_layers = n_layers,
         ϵ_canopy = ϵ_canopy,
     )
 )
@@ -178,7 +170,6 @@ radiative_transfer_args = (;
 conductance_args = (;
     parameters = MedlynConductanceParameters{FT}(;
         g1 = g1,
-        Drel = Drel,
         g0 = g0,
     )
 )
@@ -189,20 +180,12 @@ photosynthesis_args = (;
         oi = oi,
         ϕ = ϕ,
         θj = θj,
-        f = f,
         sc = sc,
         pc = pc,
         Vcmax25 = Vcmax25,
         Γstar25 = Γstar25,
         Kc25 = Kc25,
         Ko25 = Ko25,
-        To = To,
-        ΔHkc = ΔHkc,
-        ΔHko = ΔHko,
-        ΔHVcmax = ΔHVcmax,
-        ΔHΓstar = ΔHΓstar,
-        ΔHJmax = ΔHJmax,
-        ΔHRd = ΔHRd,
     )
 )
 # Set up plant hydraulics
