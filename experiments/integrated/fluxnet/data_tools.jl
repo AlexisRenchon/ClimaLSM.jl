@@ -120,16 +120,14 @@ function filter_column(driver_data::Matrix, column_name::String, units::String)
             # QC flag = [0,1] -> good data, [2,3] -> poorer data
             num_poor = count(x -> x >= 2, QC_col)
             percent_poor = 100.0 * num_poor / length(col_dat)
-            if num_poor > 0
-                if percent_poor > 90.0
-                    @info "Warning: Data for $column_name $(round(percent_poor, sigdigits=3))% poor quality. Treating as absent"
-                    return DataColumn(col_dat, "", absent)
-                else
-                    # Fill any missing data with the mean value per the QC flag
-                    replace_poor_quality_with_mean!(col_dat, QC_col)
-                    @info "Warning: Data for $column_name $(round(percent_poor, sigdigits=3))% poor quality. Filled with mean value using QC flag"
-                    return DataColumn(col_dat, units, status)
-                end
+            if percent_poor > 75.0
+                @info "Warning: Data for $column_name $(round(percent_poor, sigdigits=3))% poor quality. Treating as absent"
+                return DataColumn(col_dat, "", absent)
+            else
+                # Fill any missing data with the mean value per the QC flag
+                replace_poor_quality_with_mean!(col_dat, QC_col)
+                @info "Warning: Data for $column_name $(round(percent_poor, sigdigits=3))% poor quality. Filled with mean value using QC flag"
+                return DataColumn(col_dat, units, status)
             end
         else
             @info "Information: Data for $column_name is complete and no QC flag present"
@@ -139,7 +137,7 @@ function filter_column(driver_data::Matrix, column_name::String, units::String)
         # Replace values of -9999 with mean
         num_missing = count(x -> x == -9999, col_dat)
         percent_missing = 100.0 * num_missing / length(col_dat)
-        if percent_missing > 90.0
+        if percent_missing > 75.0
             @info "Warning: Data for $column_name $(round(percent_missing,
                             sigdigits=3))% has value of -9999. Treating as absent"
             return DataColumn(col_dat, "", absent)
