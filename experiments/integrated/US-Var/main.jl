@@ -37,21 +37,27 @@ climalsm_dir = replace(cur_dir, substring_to_remove => "")
 metadata_dir = joinpath(replace(cur_dir, "$site_name" => ""), "input")
 global main_dir = replace(climalsm_dir, "ClimaLSM.jl" => "")
 include(joinpath(climalsm_dir, "parameters", "create_parameters.jl"))
-global start_year = 1#minimum(daily)
-global end_year = 1#maximum(daily)
+global start_year =1#minimum(daily)
+global end_year = 2#maximum(daily)
 global start_date = 1 + (start_year - 1) * 365#maximum(daily)
-global end_date = 360 + (end_year - 1) * 365#maximum(daily)
+global end_date = 30 + (end_year - 1) * 365#maximum(daily)
 savedir = joinpath(climalsm_dir, "experiments/integrated/" * site_name * "/results/")
 curdir = joinpath(climalsm_dir, "experiments/integrated/" * site_name * "/")
 const FT = Float64
 earth_param_set = create_lsm_parameters(FT)
 df = CSV.File(joinpath(metadata_dir, "fluxnet_site_location.csv")) |> DataFrame
-
+global savedir_input = joinpath(climalsm_dir, "experiments/integrated/" * site_name * "/input_drivers/")
+global plot_input_var=false
+if !isdir(savedir_input)
+    mkdir(savedir_input)
+    global plot_input_var=true
+end
 # Filter the dataframe for the specific site_name (assuming you have a variable `site_name` with the desired name)
 site_row = df[lowercase.(df.Site).==lowercase(site_name), :]
 # Extract Longitude and Latitude
 global long = FT(site_row[1, :Longitude])
 global lat = FT(site_row[1, :Latitude])
+global offset = round(-long * 24 / 360)
 global spinup = 0 #allows 1 year of spinup
 global tf
 global t_spinup
@@ -97,6 +103,52 @@ soil_ps = Soil.EnergyHydrologyParameters{FT}(;
 
 soil_args = (domain=soil_domain, parameters=soil_ps)
 soil_model_type = Soil.EnergyHydrology{FT}
+
+
+# Soil microbes model
+soilco2_type = Soil.Biogeochemistry.SoilCO2Model{FT}
+
+soilco2_ps = SoilCO2ModelParameters{FT}(;
+    ν = soil_ν, # same as soil
+    θ_a100 = θ_a100,
+    D_ref = D_ref,
+    b = b,
+    D_liq = D_liq,
+    # DAMM
+    α_sx = α_sx,
+    Ea_sx = Ea_sx,
+    kM_sx = kM_sx,
+    kM_o2 = kM_o2,
+    O2_a = O2_a,
+    D_oa = D_oa,
+    p_sx = p_sx,
+    earth_param_set = earth_param_set,
+)
+
+# soil microbes args
+Csom = (z, t) -> eltype(z)(5.0)
+
+soilco2_top_bc = Soil.Biogeochemistry.SoilCO2StateBC((p, t) -> atmos_co2(t))
+
+soilco2_bot_bc = Soil.Biogeochemistry.SoilCO2FluxBC((p, t) -> 0.0) # no flux
+soilco2_sources = (MicrobeProduction{FT}(),)
+
+soilco2_boundary_conditions =
+    (; top = (CO2 = soilco2_top_bc,), bottom = (CO2 = soilco2_bot_bc,))
+
+soilco2_drivers = Soil.Biogeochemistry.SoilDrivers(
+    Soil.Biogeochemistry.PrognosticMet{FT}(),
+    Soil.Biogeochemistry.PrescribedSOC{FT}(Csom),
+    atmos,
+)
+
+soilco2_args = (;
+    boundary_conditions = soilco2_boundary_conditions,
+    sources = soilco2_sources,
+    domain = soil_domain,
+    parameters = soilco2_ps,
+    drivers = soilco2_drivers,
+)
 
 # Now we set up the canopy model, which we set up by component:
 # Component Types
@@ -209,12 +261,14 @@ canopy_model_args = (; parameters=shared_params, domain=canopy_domain)
 # Integrated plant hydraulics and soil model
 land_input = (atmos=atmos, radiation=radiation)
 land = SoilCanopyModel{FT}(;
-    land_args=land_input,
-    soil_model_type=soil_model_type,
-    soil_args=soil_args,
-    canopy_component_types=canopy_component_types,
-    canopy_component_args=canopy_component_args,
-    canopy_model_args=canopy_model_args
+    soilco2_type = soilco2_type,
+    soilco2_args = soilco2_args,
+    land_args = land_input,
+    soil_model_type = soil_model_type,
+    soil_args = soil_args,
+    canopy_component_types = canopy_component_types,
+    canopy_component_args = canopy_component_args,
+    canopy_model_args = canopy_model_args,
 )
 Y, p, cds = initialize(land)
 exp_tendency! = make_exp_tendency(land)
@@ -234,22 +288,13 @@ Y.soil.ρe_int =
         T_0,
         Ref(land.soil.parameters),
     )
-ψ_stem_0 = FT(-1e5 / 9800)
+Y.soilco2.C .= FT(0.000412) # set to atmospheric co2, mol co2 per mol air
 ψ_leaf_0 = FT(-2e5 / 9800)
-
 S_l_ini =
-    inverse_water_retention_curve.(
-        retention_model,
-        [ψ_stem_0, ψ_leaf_0],
-        plant_ν,
-        plant_S_s,
-    )
+    inverse_water_retention_curve(retention_model, ψ_leaf_0, plant_ν, plant_S_s)
 
-for i in 1:2
-    Y.canopy.hydraulics.ϑ_l.:($i) .=
-        augmented_liquid_fraction.(plant_ν, S_l_ini[i])
-end
 
+Y.canopy.hydraulics.ϑ_l.:1 .= augmented_liquid_fraction(plant_ν, S_l_ini)
 set_initial_aux_state! = make_set_initial_aux_state(land)
 set_initial_aux_state!(p, Y, t0);
 
@@ -295,6 +340,7 @@ data_per_model = Int64(dt * n ÷ DATA_DT)
 # day averaged over every day in the series.
 global N_spinup_days
 global N_days
+
 #measured data
 measured_ET = LE ./ (LSMP.LH_v0(earth_param_set) * 1000) .* (1e3 * 24 * 3600)
 tmpt = sol.t ./ 3600 ./ 24
@@ -312,7 +358,7 @@ end
 model_data[!, "GPP"] = [
     parent(sv.saveval[k].canopy.photosynthesis.GPP)[1] for
     k in 1:length(sv.saveval)]
-model_data[!, "SWC"] = [parent(sol.u[k].soil.ϑ_l)[end-1] for k in 1:1:length(sol.t)];
+model_data[!, "SWC"] = [parent(sol.u[k].soil.ϑ_l)[end] for k in 1:1:length(sol.t)];
 model_data[!, "E"] = [parent(sv.saveval[k].soil_evap)[1] for k in 1:length(sol.t)] .* (1e3 * 24 * 3600)
 model_data[!, "T"] = [
     parent(sv.saveval[k].canopy.conductance.transpiration)[1] for
@@ -326,14 +372,50 @@ CSV.write(joinpath(savedir, "model_output.csv"), model_data)
 all_columns = names(model_data)
 
 # Exclude date and time columns
-columns_to_plot = setdiff(all_columns, [:date, :time])
-
+columns_to_plot = setdiff(all_columns, ["date", "time"])
+measured_ET = LE ./ (LSMP.LH_v0(earth_param_set) * 1000) .* (1e3 * 24 * 3600)
+#=
+println(" length of T is $(length(measured_ET))")
+println(" length of LOCAL_DATETIME is $(length(LOCAL_DATETIME))")
+println(" tf is $tf")
+println(" t_spinup is $t_spinup")
+println(" DATA_DT is $DATA_DT")
+println(" length of ET is $(length(measured_ET))")
+println(" length of GPP is $(length(GPP))")
+println(" length of LOCAL_DATETIME is $(length((LOCAL_DATETIME[1:24:end])))")
+=#
+ls=Int64(round((LOCAL_DATETIME[end].-LOCAL_DATETIME[1]) ./ Millisecond(60*60*24*1000)))
+sp=Int64(round.(length(LOCAL_DATETIME)/ls))
+global id=1:sp:length(LOCAL_DATETIME)
+max_ET=maximum([maximum(measured_ET),maximum(model_data[!, "ET"] )])
 # Plot each column and save the plot
 for col in columns_to_plot
-    p = plot(model_data.date, model_data[!, col], label=col, xticks=:out, yticks=:out, xlabel="Time", ylabel=col,dpi=400)
-    savefig(p, joinpath(savedir, "$(col).png"))
+    println(col)
+    global LOCAL_DATETIME
+    global GPP
+    global SWC
+    global ET
+    global id
+
+    prnd = plot(model_data.date, model_data[!, col], xticks=:out, yticks=:out, xlabel="Time", ylabel=col,label="CliMa",dpi=400)
+    if col.=="GPP"
+        plot!(prnd,LOCAL_DATETIME[1:24:end],GPP[1:24:end],markershape=:star,color="red",label="daily FLUXNET data",dpi=400)
+    elseif col.=="ET"
+        plot!(prnd,LOCAL_DATETIME[1:24:end],measured_ET[1:24:end],markershape=:star,color="red",label="daily FLUXNET data",dpi=400,ylim=(0,max_ET))
+    elseif col.=="SWC"
+        plot!(prnd,LOCAL_DATETIME[1:24:end],SWC[1:24:end],markershape=:star,color="red",label="daily FLUXNET data",dpi=400)
+    end
+    savefig(prnd, joinpath(savedir, "$(col).png"))
 end
 @info "Saved model output to $(savedir)model_output.csv"
 #end
 
-rm(joinpath(cur_dir, "Artifacts.toml"))
+file_path = joinpath(cur_dir, "Artifacts.toml")
+
+if isfile(file_path)
+    rm(file_path)
+    println("File removed: ", file_path)
+else
+    println("File does not exist: ", file_path)
+end
+
