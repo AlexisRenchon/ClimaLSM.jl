@@ -1,10 +1,14 @@
 #= run these lines for test / development
+
 ARGS = ["US-MOz"]
 include("integrated/fluxnet/run_fluxnet.jl")
 include("integrated/fluxnet/inputs_dataframe.jl")
 include("integrated/fluxnet/climalsm_output_dataframe.jl") 
+
 # TO DO:
 # change unit from SI to what we want (e.g., umol m-2 s-1)
+# soil moisture is currently deepest I think, change the depth
+
 =# 
 
 # Make all sort of plots with data and model output
@@ -140,7 +144,7 @@ fig = timeseries_H2O_fig(inputs, climalsm)
 save(joinpath(savedir, "timeseries_H2O.pdf"), fig)
 =#
 
-# 2. Fingerprint plot
+# 3. Fingerprint plot
 function fingerprint_fig(inputs, climalsm)
     fig = Figure(size = (1000, 1000))
     fontsize_theme = Theme(fontsize = 20)
@@ -171,7 +175,11 @@ fig = fingerprint_fig(inputs, climalsm)
 save(joinpath(savedir, "fingerprint.pdf"), fig)
 =#
 
-# 3. Diurnals, with quantiles, for C, h2o, energy
+# 4. Diurnals, with quantiles, for C, h2o, energy
+# Energy: H, L, G, LW_OUT, SW_OUT
+# C: GPP, ER (AR + HR)
+# drivers: Temperature (soil, air, canopy)
+
 using Statistics
 
 function diurnal(datetime, data)
@@ -207,5 +215,9 @@ end
 fig = diurnals_fig(inputs, climalsm)
 save(joinpath(savedir, "diurnals.pdf"), fig)
 =#
+
+# 5. Cumulative P and ET
+
+# 6. Energy balance closure (L + H = Rn - G)
 
 
