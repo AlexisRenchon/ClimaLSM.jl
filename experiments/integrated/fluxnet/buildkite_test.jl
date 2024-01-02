@@ -16,11 +16,12 @@ end
 
 include(joinpath(climalsm_dir, "experiments/integrated/fluxnet/makie_plots.jl"))
 
-fig1 = timeseries_fig(inputs, climalsm)
-fig2 = fingerprint_fig(inputs, climalsm)
-fig3 = diurnals_fig(inputs, climalsm)
+fig1 = timeseries_fluxes_fig(inputs, climalsm)
+fig2 = timeseries_H2O_fig(inputs, climalsm)
+fig3 = fingerprint_fig(inputs, climalsm)
+fig4 = diurnals_fig(inputs, climalsm)
 
-names = ["timeseries.pdf", "fingerprint.pdf", "diurnals.pdf"]
+names = ["timeseries_fluxes.pdf", "timeseries_H2O.pdf", "fingerprint.pdf", "diurnals.pdf"]
 
-[save(joinpath(savedir, name), fig) for (name, fig) in zip(names, [fig1, fig2, fig3])]
+[save(joinpath(savedir, name), fig) for (name, fig) in zip(names, [fig1, fig2, fig3, fig4])]
 

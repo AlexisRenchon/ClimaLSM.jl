@@ -176,15 +176,34 @@ save(joinpath(savedir, "fingerprint.pdf"), fig)
 =#
 
 # 4. Diurnals, with quantiles, for C, h2o, energy
+
 # Energy: H, L, G, LW_OUT, SW_OUT
+# inputs.G, inputs.H, inputs.LE, inputs.SW_OUT 
+# climalsm.lhf, climalsm.shf, climalsm.LW_out, climalsm.SW_OUT # need G
+
 # C: GPP, ER (AR + HR)
+# inputs.RECO, inputs.GPP
+# climalsm.Ra, climalsm.GPP # need Rh
+
 # drivers: Temperature (soil, air, canopy)
+# inputs.TS, inputs.TA
+# climalsm.T # need canopy and soil T?
+
+
 
 using Statistics
 
 function diurnal(datetime, data)
     hourlyquantile = [quantile(data[hour.(datetime) .== h], [0.25, 0.5, 0.75]) for h = 0:1:23]
     return hourlyquantile 
+end
+
+function diurnal_plot!(fig, ax, datetime, data, color; alpha = 0.3, linestyle = :solid)
+    fig
+    hourlyquantile = diurnal(datetime, data)
+    diurnal_p = CairoMakie.lines!(ax, 0.5:1:23.5, getindex.(hourlyquantile[1:24], 2), color = color, linestyle = linestyle)
+    diurnal_q = CairoMakie.band!(ax, 0.5:1:23.5, getindex.(hourlyquantile[1:24], 1), getindex.(hourlyquantile[1:24], 3), color = (color, alpha))   
+    return diurnal_p
 end
 
 function diurnals_fig(inputs, climalsm)
@@ -194,18 +213,36 @@ function diurnals_fig(inputs, climalsm)
 
     ax_C = Axis(fig[1, 1], ylabel = L"\text{CO}_{2} \, (\mu\text{mol m}^{-2} \, \text{s}^{-1})") # C fluxes
     ax_W = Axis(fig[2, 1], ylabel = L"\text{H}_{2}\text{O} \, \text{(mm)}") # h2o fluxes
-    ax_E = Axis(fig[3, 1], ylabel = L"\text{Radiation} \, (\text{W} \, \text{m}^{-2})") # shortwave out 
+    ax_E = Axis(fig[3, 1], ylabel = L"\text{Radiation} \, (\text{W} \, \text{m}^{-2})", xlabel = L"\text{Hour of the day}", xgridvisible = false) # shortwave out 
+    
+    # CO2 fluxes
+    # model
+    p_GPP_m = diurnal_plot!(fig, ax_C, climalsm.DateTime, climalsm.GPP .* 1e6, :green)
+    diurnal_plot!(fig, ax_C, climalsm.DateTime, climalsm.Ra .* 1e6, :black)
+    # data
+    p_GPP_d = diurnal_plot!(fig, ax_C, inputs.DateTime[index_t_start:index_t_end], inputs.GPP[index_t_start:index_t_end] .* 1e6, :green, alpha = 0.1, linestyle = :dot)  
 
-    # to do: make a diurnalplot function to do this line and band, then loop over all the variables - should be 3 lines, not 20 lines...
-    GPP_diurnal = diurnal(climalsm.DateTime, climalsm.GPP)
-    GPP_diurnal_p = CairoMakie.lines!(ax_C, 0.5:1:23.5, getindex.(GPP_diurnal[1:24], 2) .* 1e6, color = :black)
-    GPP_diurnal_q = CairoMakie.band!(ax_C, 0.5:1:23.5, getindex.(GPP_diurnal[1:24], 1) .* 1e6, getindex.(GPP_diurnal[1:24], 3) .* 1e6, color = (:green, 0.3))
-
-    ET_diurnal = diurnal(climalsm.DateTime, climalsm.transpiration)
-    ET_diurnal_p = CairoMakie.lines!(ax_W, 0.5:1:23.5, getindex.(ET_diurnal[1:24], 2) .* 1e3 .* 24 .* 3600, color = :black)
-    ET_diurnal_q = CairoMakie.band!(ax_W, 0.5:1:23.5, getindex.(ET_diurnal[1:24], 1) .* 1e3 .* 24 .* 3600, getindex.(ET_diurnal[1:24], 3) .* 1e3 .* 24 .* 3600, color = (:blue, 0.3))
+    # H2O fluxes
+    # model
+    p_ET_m = diurnal_plot!(fig, ax_W, climalsm.DateTime, climalsm.transpiration .* 1e3 .*24 .* 3600, :blue)
+    # data
+    p_ET_d = diurnal_plot!(fig, ax_W, inputs.DateTime[index_t_start:index_t_end], inputs.LE[index_t_start:index_t_end] ./ (LSMP.LH_v0(earth_param_set) * 1000) .* (1e3 * 24 * 3600), :blue, alpha = 0.1, linestyle = :dot)
+   
+    # Energy fluxes
+    # model
+    # diurnal_plot!(fig, ax_E, climalsm.DateTime, climalsm.LW_out, :red)
+    p_SWout_m = diurnal_plot!(fig, ax_E, climalsm.DateTime, climalsm.SW_out, :red)
+    # data
+    p_SWout_d = diurnal_plot!(fig, ax_E, inputs.DateTime[index_t_start:index_t_end], FT.(inputs.SW_OUT[index_t_start:index_t_end]), :red, alpha = 0.1, linestyle = :dot)
 
     [CairoMakie.xlims!(axes, (0, 24)) for axes in [ax_C, ax_W, ax_E]]
+
+    axislegend(ax_C, [p_GPP_d, p_GPP_m], ["Observations", "ClimaLSM"], "", position = :rt, orientation = :horizontal)
+    axislegend(ax_W, [p_ET_d, p_ET_m], ["Observations", "ClimaLSM"], "", position = :rt, orientation = :horizontal)
+    axislegend(ax_E, [p_SWout_d, p_SWout_m], ["Observations", "ClimaLSM"], "", position = :rt, orientation = :horizontal)
+
+    hidexdecorations!(ax_C)
+    hidexdecorations!(ax_W)
 
     fig
     return fig
