@@ -16,12 +16,12 @@ using ClimaLSM.Canopy
 using ClimaLSM.Canopy.PlantHydraulics
 import ClimaLSM
 import ClimaLSM.Parameters as LSMP
-include(joinpath(pkgdir(ClimaLSM), "parameters", "create_parameters.jl"))
-include("data_tools.jl") 
-include("plot_utils.jl") 
+climalsm_dir = pkgdir(ClimaLSM)
+include(joinpath(climalsm_dir, "parameters", "create_parameters.jl"))
+include(joinpath(climalsm_dir, "experiments", "integrated", "fluxnet", "data_tools.jl")) 
+include(joinpath(climalsm_dir, "experiments", "integrated", "fluxnet", "plot_utils.jl"))
 const FT = Float64
 earth_param_set = create_lsm_parameters(FT)
-climalsm_dir = pkgdir(ClimaLSM)
 
 # Read in the site to be run from the command line
 if length(ARGS) < 1
