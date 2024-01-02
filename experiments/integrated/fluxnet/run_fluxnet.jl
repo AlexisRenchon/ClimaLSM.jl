@@ -1,70 +1,3 @@
-import SciMLBase
-import ClimaTimeSteppers as CTS
-using ClimaCore
-import CLIMAParameters as CP
-# using Plots # Whether we use Plots.jl or Makie.jl, will be in another script
-using Statistics
-using Dates
-using Insolation
-using StatsBase
-
-using ClimaLSM
-using ClimaLSM.Domains: Column
-using ClimaLSM.Soil
-using ClimaLSM.Soil.Biogeochemistry
-using ClimaLSM.Canopy
-using ClimaLSM.Canopy.PlantHydraulics
-import ClimaLSM
-import ClimaLSM.Parameters as LSMP
-climalsm_dir = pkgdir(ClimaLSM)
-include(joinpath(climalsm_dir, "parameters", "create_parameters.jl"))
-include(joinpath(climalsm_dir, "experiments", "integrated", "fluxnet", "data_tools.jl")) 
-include(joinpath(climalsm_dir, "experiments", "integrated", "fluxnet", "plot_utils.jl"))
-const FT = Float64
-earth_param_set = create_lsm_parameters(FT)
-
-# Read in the site to be run from the command line
-if length(ARGS) < 1
-    error("Must provide site ID on command line")
-end
-
-site_ID = ARGS[1]
-
-# Read all site-specific domain parameters from the simulation file for the site
-include(
-    joinpath(
-        climalsm_dir,
-        "experiments/integrated/fluxnet/$site_ID/$(site_ID)_simulation.jl",
-    ),
-)
-
-include(
-    joinpath(climalsm_dir, "experiments/integrated/fluxnet/fluxnet_domain.jl"),
-)
-
-# Read all site-specific parameters from the parameter file for the site
-include(
-    joinpath(
-        climalsm_dir,
-        "experiments/integrated/fluxnet/$site_ID/$(site_ID)_parameters.jl",
-    ),
-)
-
-# This reads in the data from the flux tower site and creates
-# the atmospheric and radiative driver structs for the model
-include(
-    joinpath(
-        climalsm_dir,
-        "experiments/integrated/fluxnet/met_drivers_FLUXNET.jl",
-    ),
-)
-include(
-    joinpath(
-        climalsm_dir,
-        "experiments/integrated/fluxnet/fluxnet_simulation.jl",
-    ),
-)
-
 # Now we set up the model. For the soil model, we pick
 # a model type and model args:
 soil_domain = land_domain
@@ -324,9 +257,18 @@ sol = SciMLBase.solve(
     saveat = saveat,
 )
 
-if isfile(joinpath(climalsm_dir, "experiments/integrated/fluxnet/$site_ID/Artifacts.toml"))
-    rm(joinpath(climalsm_dir, "experiments/integrated/fluxnet/$site_ID/Artifacts.toml"))
+if isfile(
+    joinpath(
+        climalsm_dir,
+        "experiments/integrated/fluxnet/$site_ID/Artifacts.toml",
+    ),
+)
+    rm(
+        joinpath(
+            climalsm_dir,
+            "experiments/integrated/fluxnet/$site_ID/Artifacts.toml",
+        ),
+    )
 else
     nothing
 end
-

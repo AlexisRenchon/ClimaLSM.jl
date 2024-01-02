@@ -374,4 +374,3 @@ if length(ARGS) ≥ 1 && ARGS[1] == "save"
     writedlm(joinpath(savedir, "model_output.csv"), timestamps, ',')
     @info "Saved model output to $(savedir)model_output.csv"
 end
-
