@@ -27,7 +27,6 @@ include("integrated/fluxnet/climalsm_output_dataframe.jl")
 # publication style and presentation style (bigger font etc.)
 
 using ClimaLSM 
-climalsm_dir = pkgdir(ClimaLSM)
 savedir = joinpath(climalsm_dir, "experiments", "integrated", "fluxnet/figures/") 
 using CairoMakie # Draw vector graphics to SVG or PDF. High quality plots! 
 using LaTeXStrings # To have latex labels
@@ -36,7 +35,7 @@ using PlotUtils: optimize_ticks
 # drivers will be in drivers from Ed PR
 
 # 1. Time series of GPP, ET and SW_OUT
-function timeseries_fig(inputs, climalsm) # will run for any inputs or climalsm output of FLUXNET sites
+function timeseries_fluxes_fig(inputs, climalsm) # will run for any inputs or climalsm output of FLUXNET sites
     # create an empty figure
     fig = Figure(size = (1000, 1000)) # note: do not load Plots.jl in this branch (it is loading in plot_utils)
     fontsize_theme = Theme(fontsize = 20)
@@ -44,7 +43,7 @@ function timeseries_fig(inputs, climalsm) # will run for any inputs or climalsm 
 
     # create empty axis, with a specific layout
     ax_C = Axis(fig[1, 1], ylabel = L"\text{GPP} \, (\mu\text{mol m}^{-2} \, \text{s}^{-1})") # C fluxes
-    ax_W = Axis(fig[2, 1], ylabel = "ET (mm)") # h2o fluxes
+    ax_W = Axis(fig[2, 1], ylabel = L"\text{ET (mm)}") # h2o fluxes
     ax_SWOUT = Axis(fig[3, 1], ylabel = L"\text{SW OUT} \, (\text{W} \, \text{m}^{-2})") # shortwave out 
     # ax_T = Axis(fig[4, 1]) # air, canopy, and soil temperature
 
@@ -82,10 +81,64 @@ function timeseries_fig(inputs, climalsm) # will run for any inputs or climalsm 
 end
 
 #= to test. These will be in another script though.
-fig = timeseries_fig(inputs, climalsm) 
-save(joinpath(savedir, "timeseries.pdf"), fig)
+fig = timeseries_fluxes_fig(inputs, climalsm) 
+save(joinpath(savedir, "timeseries_fluxes.pdf"), fig)
 =#
 
+# 2. Time series of SWC, Precip, moisture stress, stomatal conductance
+function timeseries_H2O_fig(inputs, climalsm) # will run for any inputs or climalsm output of FLUXNET sites
+    # create an empty figure
+    fig = Figure(size = (1000, 1000)) # note: do not load Plots.jl in this branch (it is loading in plot_utils)
+    fontsize_theme = Theme(fontsize = 20)
+    set_theme!(fontsize_theme)
+
+    # create empty axis, with a specific layout
+    ax_H2O = Axis(fig[1, 1], ylabel = L"\theta \, (\text{m}^{3} \, \text{m}^{-3})") # soil moisture
+    ax_H2O_rain = Axis(fig[1, 1], ylabel = L"\text{Rainfall (mm)}", yaxisposition = :right, ygridvisible = false, ylabelcolor = :blue, yticklabelcolor = :blue)
+    ax_MS = Axis(fig[2, 1], ylabel = L"\text{Moisture stress}") # moisture stress
+    ax_SC = Axis(fig[3, 1], ylabel = L"\text{Stomatal conductance} \, (\text{mol m}^{-2} \, \text{s}^{-1})") # stomatal conductance 
+    # ax_T = Axis(fig[4, 1]) # air, canopy, and soil temperature
+
+    # for time series, Makie should allow DateTime type soon (but not yet)
+    # so the 2 lines of code below are a trick to be able to use DateTime - will be removed later
+    dateticks = optimize_ticks(climalsm.DateTime[1], climalsm.DateTime[end])[1][2:end-1] # first and last are weirdly placed
+
+    # add plots into axis ax_H2O
+    p_H2O_m = CairoMakie.scatter!(ax_H2O, datetime2unix.(climalsm.DateTime), climalsm.θ_l, color = :green)
+    p_H2O_d = CairoMakie.scatter!(ax_H2O, datetime2unix.(inputs.DateTime[index_t_start:index_t_end]), inputs.SWC[index_t_start:index_t_end], color = :black) 
+
+    # Rain on secondary axis
+    p_rain = barplot!(ax_H2O_rain, datetime2unix.(inputs.DateTime[index_t_start:index_t_end]), inputs.P[index_t_start:index_t_end], color = :blue)
+
+    # Moisture stress
+    p_MS = CairoMakie.scatter!(ax_MS, datetime2unix.(climalsm.DateTime), climalsm.β, color = :green) # not sure about units
+
+    # Stomatal conductance
+    p_SC = CairoMakie.scatter!(ax_SC, datetime2unix.(climalsm.DateTime), climalsm.gs, color = :green)
+
+    # xticks
+    ax_H2O.xticks[] = (datetime2unix.(dateticks) , Dates.format.(dateticks, "mm/dd"))
+    ax_H2O_rain.xticks[] = (datetime2unix.(dateticks) , Dates.format.(dateticks, "mm/dd"))
+    hidexdecorations!(ax_H2O_rain)
+    ax_MS.xticks[] = (datetime2unix.(dateticks) , Dates.format.(dateticks, "mm/dd"))
+    ax_SC.xticks[] = (datetime2unix.(dateticks) , Dates.format.(dateticks, "mm/dd"))
+
+    axislegend(ax_H2O, [p_H2O_d, p_H2O_m], ["Observations", "ClimaLSM"], "", position = :rt, orientation = :horizontal)
+
+    #CairoMakie.ylims!(ax_C, (0, 40))
+    #CairoMakie.ylims!(ax_W, (0, 30))
+    #CairoMakie.ylims!(ax_SWOUT, (0, 200))
+
+    [CairoMakie.xlims!(axes, (datetime2unix(climalsm.DateTime[1]), datetime2unix(climalsm.DateTime[end]))) for axes in [ax_H2O, ax_H2O_rain, ax_MS, ax_SC]]
+
+    fig
+    return fig
+end
+
+#= to test. These will be in another script though.
+fig = timeseries_H2O_fig(inputs, climalsm) 
+save(joinpath(savedir, "timeseries_H2O.pdf"), fig)
+=#
 
 # 2. Fingerprint plot
 function fingerprint_fig(inputs, climalsm)
