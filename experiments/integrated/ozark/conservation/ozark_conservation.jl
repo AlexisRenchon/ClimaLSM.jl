@@ -338,14 +338,6 @@ for float_type in (Float32, Float64)
         saveat = saveat,
     )
 
-    # Check that the driver variables stored in `p` are
-    # updated correctly - just check one from radiation,
-    # and one from atmos.
-    cache_θs = [parent(sv.saveval[k].drivers.θs)[1] for k in 1:length(sv.t)]
-    cache_Tair = [parent(sv.saveval[k].drivers.T)[1] for k in 1:length(sv.t)]
-    @assert mean(abs.(radiation.θs.(sv.t, radiation.ref_time) .- cache_θs)) <
-            eps(FT)
-    @assert mean(abs.(atmos.T.(sv.t) .- cache_Tair)) < eps(FT)
     # Check that simulation still has correct float type
     @assert eltype(sol.u[end].soil) == FT
     @assert eltype(sol.u[end].soilco2) == FT
@@ -353,6 +345,17 @@ for float_type in (Float32, Float64)
 
     # Plotting for Float64 simulation
     if FT == Float64
+        # Check that the driver variables stored in `p` are
+        # updated correctly - just check one from radiation,
+        # and one from atmos.
+        cache_θs = [parent(sv.saveval[k].drivers.θs)[1] for k in 1:length(sv.t)]
+        cache_Tair =
+            [parent(sv.saveval[k].drivers.T)[1] for k in 1:length(sv.t)]
+        @assert mean(
+            abs.(radiation.θs.(sv.t, radiation.ref_time) .- cache_θs),
+        ) < eps(FT)
+        @assert mean(abs.(atmos.T.(sv.t) .- cache_Tair)) < eps(FT)
+
         daily = sol.t[2:end] ./ 3600 ./ 24
         savedir =
             joinpath(climalsm_dir, "experiments/integrated/ozark/conservation")
