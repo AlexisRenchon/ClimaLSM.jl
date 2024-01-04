@@ -10,3 +10,5 @@ pkg> add ClimaLandSite
 pkg> *backspace*
 julia> using ClimaLandSite
 ```
+
+For examples, see the experiments folder
