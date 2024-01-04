@@ -1,4 +1,4 @@
-function run(ID; paramaters, domain)
+function run(ID; paramaters = parameters, domain = domain) # these args do not exist, for now suggestion 
 
     # Now we set up the model. For the soil model, we pick
     # a model type and model args:
