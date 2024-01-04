@@ -215,7 +215,7 @@ This function is used by `DriverUpdateCallback` to perform the updating.
 function (affect!::DriverAffect)(integrator)
     # If there are still update times in the queue and
     # they are less than the current simulation time,
-    # cycle through until you reach the most `updateat` value
+    # cycle through until you reach the `updateat` value
     # closest to, but less than, the current simulation time.
     # This is important if the user happens to set update times
     # such that there are multiple per timestep
@@ -230,7 +230,7 @@ function (affect!::DriverAffect)(integrator)
 end
 
 """
-    DriverUpdateCallback(updateat::Vector{FT})
+    DriverUpdateCallback(updateat::Vector{FT}, updatefunc)
 
 Constructs a DiscreteCallback which updates the cache `p.drivers` at each time
 specified by `updateat`, using the function `updatefunc` which takes as arguments (p.drivers,t).

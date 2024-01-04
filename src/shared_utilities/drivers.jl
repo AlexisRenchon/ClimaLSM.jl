@@ -646,7 +646,7 @@ function make_update_drivers(r::PrescribedRadiativeFluxes{FT}) where {FT}
     function update_drivers!(drivers, t)
         drivers.SW_d .= FT(r.SW_d(t))
         drivers.LW_d .= FT(r.LW_d(t))
-        if ~(r.θs isa Nothing)
+        if isnothing(r.θs)
             drivers.θs .= FT(r.θs(t, r.ref_time))
         else
             drivers.θs .= FT(0)

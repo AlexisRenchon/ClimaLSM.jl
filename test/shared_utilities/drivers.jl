@@ -109,4 +109,11 @@ end
     @test drivers.SW_d == [FT(10)]
     @test drivers.LW_d == [FT(10)]
     @test drivers.θs == [FT(0)]
+
+    drivers = ClimaLSM.initialize_drivers(nothing, pr, coords)
+    rad_only_update! = ClimaLSM.make_update_drivers(nothing, pr)
+    rad_only_update!(drivers, 0.0)
+    @test drivers.SW_d == [FT(10)]
+    @test drivers.LW_d == [FT(10)]
+    @test drivers.θs == [FT(0)]
 end
